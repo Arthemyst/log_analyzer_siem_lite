@@ -1,2 +1,3 @@
 # log_analyzer_siem_lite
-simple app to detect auth attacks
+Log Analyzer (SIEM-lite)
+Prosty analizator logów systemowych z detekcją zagrożeń (SSH brute-force, root login).
