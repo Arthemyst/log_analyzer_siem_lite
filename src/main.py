@@ -1,6 +1,7 @@
 import typer
 
 from suspicious_patterns import detect_suspicious_entries
+from generate_report import generate_pdf_report
 from utils import load_log_file
 
 app = typer.Typer()
@@ -8,16 +9,19 @@ app = typer.Typer()
 
 class LogsAnalyzer:
     @staticmethod
-    def analyze_logs(log_file):
+    def analyze_logs(log_file: str) -> list:
         lines = load_log_file(log_file)
-        alerts = detect_suspicious_entries(lines)
-        for alert_type, log_line in alerts:
-            print(f"ALERT: {alert_type}, DETAILS: {log_line}")
+        return detect_suspicious_entries(lines)
+
+    @staticmethod
+    def generate_pdf_report(alerts: list):
+        generate_pdf_report(alerts)
 
 
 @app.command()
 def analyze_logs(path_to_file: str):
-    LogsAnalyzer.analyze_logs(path_to_file)
+    alerts = LogsAnalyzer.analyze_logs(path_to_file)
+    LogsAnalyzer.generate_pdf_report(alerts)
 
 
 # '/var/log/auth.log'
