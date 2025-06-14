@@ -15,3 +15,11 @@ def test_parsing_log_without_time():
 
     time_match = parse_time(logs)
     assert (time_match is None)
+
+
+def test_parsing_log_with_wrong_time_format():
+    logs = ["11:00:01 2025 Jun 11 server sshd[11111]: Failed password for invalid user admin from 10.0.0.1 port 54321 ssh2",
+            "Jun 11 11:00:01 server sshd[11111]: Failed password for invalid user admin from 10.0.0.1 port 54321 ssh2"]
+    for log in logs:
+        time_match = parse_time(log)
+        assert (time_match is None)
