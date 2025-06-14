@@ -55,7 +55,8 @@ def test_true_brute_force_detection():
     assert len(brute_force_alerts) >= 1
 
 
-def test_without_brute_force_detection():
+def test_without_brute_force_detection_because_5th_try_is_after_120_seconds():
+
     logs = [
         "2025 Jun 11 11:00:01 server sshd[11111]: Failed password for admin from 10.0.0.1 port 54321 ssh2",
         "2025 Jun 11 11:00:20 server sshd[11112]: Failed password for admin from 10.0.0.1 port 54322 ssh2",
