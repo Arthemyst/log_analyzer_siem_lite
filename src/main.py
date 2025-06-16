@@ -14,12 +14,12 @@ class LogsAnalyzer:
         return detect_suspicious_entries(lines)
 
     @staticmethod
-    def generate_pdf_report(alerts: list):
+    def generate_pdf_report(alerts: list) -> None:
         generate_pdf_report(alerts)
 
 
 @app.command()
-def analyze_logs(path_to_file: str):
+def analyze_logs(path_to_file: str) -> None:
     alerts = LogsAnalyzer.analyze_logs(path_to_file)
     LogsAnalyzer.generate_pdf_report(alerts)
 
