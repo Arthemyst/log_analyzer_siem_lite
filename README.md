@@ -5,10 +5,10 @@
 To lekki analizator logów systemowych napisany w Pythonie, inspirowany funkcjonalnością prostego systemu SIEM (Security Information and Event Management).  
 Narzędzie służy do wykrywania potencjalnych zagrożeń w logach SSH, takich jak:
 
-- 🔐 Nieudane próby logowania (`Failed password`)
-- ⚠️ Logowanie na konto root (`Accepted password for root`)
-- 🚨 Próby ataku typu brute-force (≥ 5 prób w krótkim czasie)
-- 📝 Generowanie raportu z alertami do formatu **PDF**
+- Nieudane próby logowania (`Failed password`)
+- ⚠Logowanie na konto root (`Accepted password for root`)
+- Próby ataku typu brute-force (≥ 5 prób w krótkim czasie)
+- Generowanie raportu z alertami do formatu **PDF**
 
 ### Przykładowy plik logów
 - `auth_sample_40.log` zawiera 20 podejrzanych i 20 prawidłowych wpisów do testowania.
@@ -45,13 +45,13 @@ np. `python main.py .\samples\auth_sample_40.log`
 A lightweight system log analyzer written in Python, inspired by SIEM (Security Information and Event Management) tools.
 It detects potential security threats in SSH logs, including:
 
-- 🔐 Failed login attempts (Failed password)
+- Failed login attempts (Failed password)
 
-- ⚠️ Successful root login events
+- Successful root login events
 
-- 🚨 Brute-force login patterns (≥ 5 attempts within short time)
+- Brute-force login patterns (≥ 5 attempts within short time)
 
-- 📝 Generates a PDF report with alerts
+- Generates a PDF report with alerts
 
 ### Sample log
 
