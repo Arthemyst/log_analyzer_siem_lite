@@ -6,8 +6,11 @@ To lekki analizator logów systemowych napisany w Pythonie, inspirowany funkcjon
 Narzędzie służy do wykrywania potencjalnych zagrożeń w logach SSH, takich jak:
 
 - Nieudane próby logowania (`Failed password`)
-- ⚠Logowanie na konto root (`Accepted password for root`)
+
+- Logowanie na konto root (`Accepted password for root`)
+
 - Próby ataku typu brute-force (≥ 5 prób w krótkim czasie)
+
 - Generowanie raportu z alertami do formatu **PDF**
 
 ### Przykładowy plik logów
