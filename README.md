@@ -44,13 +44,12 @@ to spowoduje:
 
 - monitorowanie logów pojawiających się w pliku/plikach np. test.log
 
-- zapisanie nieudanych prób logowania w cache (w celu wykrycia brute force nawet po zrestartowaniu analizera)
+- zapisanie nieudanych prób logowania w sqlite cache database (w celu wykrycia brute force nawet po zrestartowaniu analizera)
 - zapisanie wyników w pliku alerts.json na potrzeby przyszłych analiz 
 
 
 ### Następne kroki
 
-- zapisywanie logów w czasie rzeczywistym do bazy danych 
 - witryna z wykresami do analizy danych
 
 ---
@@ -92,16 +91,14 @@ It will:
 - generate report.pdf with detected incidents.
 
 #### To monitor logs in real time
-in src directory -> `python src/main.py --realtime`
+in src directory -> `python -m src.main  --realtime --paths test.log`
 
 It will:
 
 - monitor logs appeared in logs file ex. test.log
-- save failed logs into cache
+- save failed logs into sqlite cache database
 - save details into alerts.json
 
 ### Next steps
 
-- real time logs processing
-- saving real time logs to the database 
 - website with dashboard to data analysis
