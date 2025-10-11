@@ -71,16 +71,25 @@ in root directory
 `pip install -r requirements.txt`
 
 ### How to Run
-
+#### To analyze specific logs file
 in src directory -> `python main.py [path to log file]`
 
-ex. `python main.py .\samples\auth_sample_40.log`
+ex. `python main.py --path-to-file .\samples\auth_sample_40.log`
 
-#### It will:
+It will:
 
 - process auth_sample_40.log
 
 - generate report.pdf with detected incidents.
+
+#### To monitor logs in real time
+in src directory -> `python src/main.py --realtime`
+
+It will:
+
+- monitor logs appeared in logs file ex. test.log
+- save failed logs into cache
+- save details into alerts.json
 
 ### Next steps
 
