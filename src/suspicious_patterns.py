@@ -2,6 +2,7 @@ import re
 from collections import defaultdict
 from datetime import datetime, timedelta
 
+FAILED_LOGINS  = defaultdict(list)
 
 def parse_time(line: str) -> datetime | None:
     time_match = re.match(r"^(\d{4}\s+\w+\s+\d+\s+\d+:\d+:\d+)", line)
@@ -12,11 +13,11 @@ def parse_time(line: str) -> datetime | None:
         except ValueError:
             pass
         return None
+    return None
 
 
 def detect_suspicious_entries(log_lines: list, brute_force_threshold: int = 5, brute_force_window: int = 120) -> list:
     alerts = []
-    failed_logins = defaultdict(list)
 
     for log_line in log_lines:
         log_line = log_line.strip()
@@ -30,10 +31,10 @@ def detect_suspicious_entries(log_lines: list, brute_force_threshold: int = 5, b
                 alerts.append(("Failed login attempt", log_line))
 
                 # Brute-force analyse
-                failed_logins[login].append(log_time)
+                FAILED_LOGINS[login].append(log_time)
                 window_start = log_time - timedelta(seconds=brute_force_window)
-                recent = [time for time in failed_logins[login] if time >= window_start]
-                failed_logins[login] = recent
+                recent = [time for time in FAILED_LOGINS[login] if time >= window_start]
+                FAILED_LOGINS[login] = recent
 
                 if len(recent) == brute_force_threshold:
                     alerts.append((
