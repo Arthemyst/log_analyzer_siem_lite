@@ -18,28 +18,39 @@ Narzędzie służy do wykrywania potencjalnych zagrożeń w logach SSH, takich j
 
 ### Wymagania
 - Python 3.10+
-- fpdf (raporty PDF)
-- typer (komendy w terminale)
 
 ### Instalowanie zależności 
-w 
-`pip install -r requirements.txt`
+w `pip install -r requirements.txt`
 
 ### Jak uruchomić
+
+#### Analiza wybranego pliku z logami
 
 w folderze src -> `python main.py [path to log file]`
 
 np. `python main.py .\samples\auth_sample_40.log`
 
-#### to spowoduje:
+to spowoduje:
 
 - przetworzenie pliku auth_sample_40.log
 
 - wygenerowanie pliku report.pdf z wykrytymi incydentami
 
-### Next steps
+#### Monitorowanie logów w czasie rzeczywistym
 
-- przetwarzanie logów w czasie rzeczywistym
+w folderze src -> `python src/main.py --realtime`
+
+to spowoduje:
+
+- monitorowanie logów pojawiających się w pliku/plikach np. test.log
+
+- zapisanie nieudanych prób logowania w cache (w celu wykrycia brute force nawet po zrestartowaniu analizera)
+- zapisanie wyników w pliku alerts.json na potrzeby przyszłych analiz 
+
+
+### Następne kroki
+
+- zapisywanie logów w czasie rzeczywistym do bazy danych 
 - witryna z wykresami do analizy danych
 
 ---
@@ -63,8 +74,6 @@ It detects potential security threats in SSH logs, including:
 ### Requirements
 
 - Python 3.10+
-- fpdf (for PDF reports)
-- typer (for terminal commands)
 
 ### Install dependencies
 in root directory
@@ -94,4 +103,5 @@ It will:
 ### Next steps
 
 - real time logs processing
+- saving real time logs to the database 
 - website with dashboard to data analysis
