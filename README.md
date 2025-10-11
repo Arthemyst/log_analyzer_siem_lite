@@ -18,28 +18,38 @@ Narzędzie służy do wykrywania potencjalnych zagrożeń w logach SSH, takich j
 
 ### Wymagania
 - Python 3.10+
-- fpdf (raporty PDF)
-- typer (komendy w terminale)
 
 ### Instalowanie zależności 
-w 
-`pip install -r requirements.txt`
+w `pip install -r requirements.txt`
 
 ### Jak uruchomić
+
+#### Analiza wybranego pliku z logami
 
 w folderze src -> `python main.py [path to log file]`
 
 np. `python main.py .\samples\auth_sample_40.log`
 
-#### to spowoduje:
+to spowoduje:
 
 - przetworzenie pliku auth_sample_40.log
 
 - wygenerowanie pliku report.pdf z wykrytymi incydentami
 
-### Next steps
+#### Monitorowanie logów w czasie rzeczywistym
 
-- przetwarzanie logów w czasie rzeczywistym
+w folderze src -> `python src/main.py --realtime`
+
+to spowoduje:
+
+- monitorowanie logów pojawiających się w pliku/plikach np. test.log
+
+- zapisanie nieudanych prób logowania w sqlite cache database (w celu wykrycia brute force nawet po zrestartowaniu analizera)
+- zapisanie wyników w pliku alerts.json na potrzeby przyszłych analiz 
+
+
+### Następne kroki
+
 - witryna z wykresami do analizy danych
 
 ---
@@ -63,26 +73,32 @@ It detects potential security threats in SSH logs, including:
 ### Requirements
 
 - Python 3.10+
-- fpdf (for PDF reports)
-- typer (for terminal commands)
 
 ### Install dependencies
 in root directory
 `pip install -r requirements.txt`
 
 ### How to Run
-
+#### To analyze specific logs file
 in src directory -> `python main.py [path to log file]`
 
-ex. `python main.py .\samples\auth_sample_40.log`
+ex. `python main.py --path-to-file .\samples\auth_sample_40.log`
 
-#### It will:
+It will:
 
 - process auth_sample_40.log
 
 - generate report.pdf with detected incidents.
 
+#### To monitor logs in real time
+in src directory -> `python -m src.main  --realtime --paths test.log`
+
+It will:
+
+- monitor logs appeared in logs file ex. test.log
+- save failed logs into sqlite cache database
+- save details into alerts.json
+
 ### Next steps
 
-- real time logs processing
 - website with dashboard to data analysis
