@@ -3,7 +3,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 
-def parse_time(line):
+def parse_time(line: str) -> datetime | None:
     time_match = re.match(r"^(\d{4}\s+\w+\s+\d+\s+\d+:\d+:\d+)", line)
 
     if time_match:

@@ -3,7 +3,7 @@ from datetime import datetime
 from fpdf import FPDF
 
 
-def generate_pdf_report(alerts, filename="report.pdf"):
+def generate_pdf_report(alerts: list, filename: str = "report.pdf") -> None:
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
