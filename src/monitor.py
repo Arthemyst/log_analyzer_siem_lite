@@ -3,10 +3,11 @@ import json
 import os
 from datetime import datetime
 from typing import Optional
-
+import re
 import aiofiles
 
 from .suspicious_patterns import detect_suspicious_entries
+from .threat_intel import fetch_ip_info, severity_from_score
 
 ALERTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "alerts")
 ALERT_JSON = os.path.join(ALERTS_DIR, "alerts.json")
@@ -38,21 +39,34 @@ async def follow_file(path: str):
 
 async def process_line(line: str, source: str):
     try:
-        print(f"- Processing {line}")
         result = detect_suspicious_entries([line])
-        print(f"- Suspicious entries: {result}")
-        if result:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            alert = {
-                "timestamp": timestamp,
-                "source": source,
-                "log": line,
-                "alert": result
-            }
+        if not result:
+            return
 
-            await save_alert(alert)
+        timestamp = datetime.now().isoformat()
 
-            print(f"[ALERT] {timestamp} | {source} -> {result}")
+        ip_match = re.search(r"from\s+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", line)
+        intel_data = None
+        if ip_match:
+            ip = ip_match.group(1)
+            intel_data = await fetch_ip_info(ip)
+            if intel_data:
+                print(
+                    f"[THREAT INTEL] {ip} | score={intel_data['abuse_score']} "
+                    f"severity={intel_data['severity']} | country={intel_data['country']} | ISP={intel_data['isp']}"
+                )
+
+        alert = {
+            "timestamp": timestamp,
+            "source": source,
+            "log": line,
+            "alerts": [{"type": a[0], "message": a[1]} for a in result],
+            "threat_intel": intel_data
+        }
+
+        await save_alert(alert)
+        print(f"[ALERT] {timestamp} | {source} -> {result}")
+
     except Exception as e:
         print(f"[ERROR] Processing line: {e}")
 
@@ -65,10 +79,16 @@ async def save_alert(alert: dict):
             async with aiofiles.open(ALERT_JSON, 'r') as f:
                 content = await f.read()
                 if content:
-                    alerts = json.loads(content)
+                    try:
+                        alerts = json.loads(content)
+                    except json.decoder.JSONDecodeError:
+                        alerts = []
+
         alerts.append(alert)
+
         async with aiofiles.open(ALERT_JSON, 'w') as f:
             await f.write(json.dumps(alerts, indent=4))
+
     except Exception as e:
         print(f"[ERROR] Saving alert: {e}")
 
