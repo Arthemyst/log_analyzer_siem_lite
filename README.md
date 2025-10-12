@@ -1,9 +1,9 @@
-## Log Analyzer (SIEM-lite)
+# 🇵🇱 Log Analyzer (SIEM-lite)
 
-### Opis projektu
+## Opis projektu
 
-To lekki analizator logów systemowych napisany w Pythonie, inspirowany funkcjonalnością prostego systemu SIEM (Security Information and Event Management).  
-Narzędzie służy do wykrywania potencjalnych zagrożeń w logach SSH, takich jak:
+**Log Analyzer (SIEM-lite)** to lekki analizator logów systemowych w Pythonie, inspirowany systemami klasy **SIEM (Security Information and Event Management)**.  
+Narzędzie wykrywa i klasyfikuje potencjalne incydenty bezpieczeństwa w logach SSH, wzbogacając je o dane z zewnętrznych źródeł **Threat Intelligence**.
 
 - Nieudane próby logowania (`Failed password`)
 
@@ -13,92 +13,178 @@ Narzędzie służy do wykrywania potencjalnych zagrożeń w logach SSH, takich j
 
 - Generowanie raportu z alertami do formatu **PDF**
 
-### Przykładowy plik logów
-- `auth_sample_40.log` zawiera 20 podejrzanych i 20 prawidłowych wpisów do testowania.
+## Funkcje
 
-### Wymagania
+- **Monitorowanie logów w czasie rzeczywistym**  
+  Asynchroniczny mechanizm śledzenia wpisów (`aiofiles`, `asyncio`).
+
+- **Wykrywanie prób brute-force**  
+  Analiza logów w oknach czasowych, wykrywanie ≥ 5 prób logowania w krótkim czasie.  
+  Mechanizm pamięta ostatni alert dla danego użytkownika w bazie SQLite.
+
+- **Integracja z Threat Intelligence APIs (AbuseIPDB)**  
+  Automatyczne sprawdzanie reputacji adresów IP, zapis danych (kraj, ISP, liczba zgłoszeń, confidence score).  
+  Dane są buforowane w lokalnej bazie SQLite, aby ograniczyć zapytania do API.
+
+- **Raportowanie PDF**  
+  Generowanie czytelnych raportów z wykrytymi incydentami i informacjami o reputacji źródeł.
+
+- **Trwała baza SQLite**  
+  Przechowuje historię nieudanych logowań, alertów brute-force i ocen reputacji IP.
+
+
+## Przykładowy plik logów
+
+- `auth_sample_40.log` — zawiera 20 podejrzanych i 20 prawidłowych wpisów do testowania działania analizera.
+
+## Wymagania
 - Python 3.10+
 
-### Instalowanie zależności 
+## Instalowanie zależności 
 w `pip install -r requirements.txt`
 
-### Jak uruchomić
+## Jak uruchomić
 
-#### Analiza wybranego pliku z logami
+### Analiza wybranego pliku z logami
 
-w folderze src -> `python main.py [path to log file]`
+w folderze src -> `python main.py --path-to-file [path to log file]`
 
-np. `python main.py .\samples\auth_sample_40.log`
+ex. 
 
-to spowoduje:
+```bash
+python main.py --path-to-file .\samples\auth_sample_40.log
+```
 
-- przetworzenie pliku auth_sample_40.log
+To spowoduje:
+- analizę pliku logów,  
+- wzbogacenie alertów o dane reputacyjne (Threat Intelligence),  
+- wygenerowanie raportu `report.pdf`.
 
-- wygenerowanie pliku report.pdf z wykrytymi incydentami
+### Monitorowanie logów w czasie rzeczywistym
 
-#### Monitorowanie logów w czasie rzeczywistym
+w folderze src -> `python src/main.py --realtime [path to log file]`
 
-w folderze src -> `python src/main.py --realtime`
+ex.
 
-to spowoduje:
+```bash
+python main.py --realtime --paths test.log
+```
 
-- monitorowanie logów pojawiających się w pliku/plikach np. test.log
+To spowoduje:
 
-- zapisanie nieudanych prób logowania w sqlite cache database (w celu wykrycia brute force nawet po zrestartowaniu analizera)
-- zapisanie wyników w pliku alerts.json na potrzeby przyszłych analiz 
+- śledzenie wpisów w czasie rzeczywistym,
+  
+- zapisywanie prób logowania w bazie `cache/failed_logins.db`,
+  
+- pobieranie reputacji IP z AbuseIPDB (cacheowane),
+  
+- zapisywanie alertów w `alerts/alerts.json`.
 
+## Struktura danych
 
-### Następne kroki
+| Tabela | Opis |
+|--------|------|
+| `failed_logins` | Historia nieudanych logowań |
+| `alerts_log` | Ostatnie alerty brute-force dla danego użytkownika |
+| `cache` | Bufor reputacji IP (z Threat Intelligence API) |
 
-- witryna z wykresami do analizy danych
+## Następne kroki
 
----
+- Moduł **Machine Learning Anomaly Detection**  
+  (automatyczne wykrywanie nietypowych wzorców aktywności)
+  
+- **Interfejs webowy** z dashboardem (Streamlit / Dash)
+  
+# 🇬🇧 Log Analyzer (SIEM-lite)
 
-### Project Description
-A lightweight system log analyzer written in Python, inspired by SIEM (Security Information and Event Management) tools.
-It detects potential security threats in SSH logs, including:
+## Project Description
 
-- Failed login attempts (Failed password)
+**Log Analyzer (SIEM-lite)** is a lightweight Python-based log analyzer inspired by SIEM systems.  
+It detects, classifies, and enriches security incidents in SSH logs with data from **Threat Intelligence APIs**.
 
-- Successful root login events
+## Features
 
-- Brute-force login patterns (≥ 5 attempts within short time)
+- **Real-time Log Monitoring**  
+  Asynchronous file watching using `aiofiles` and `asyncio`.
 
-- Generates a PDF report with alerts
+- **Brute-force Detection**  
+  Detects ≥ 5 failed login attempts within a defined time window.  
+  Persists last alert timestamps per user in SQLite to avoid duplicates.
 
-### Sample log
+- **Threat Intelligence API Integration (AbuseIPDB)**  
+  Fetches IP reputation details (country, ISP, confidence score, total reports).  
+  Cached locally in SQLite to reduce API requests.
 
-- `auth_sample_40.log` contains 20 suspicious and 20 normal entries for testing.
+- **PDF Alert Reporting**  
+  Generates structured reports with enriched incident data and IP reputation.
 
-### Requirements
+- **Persistent SQLite Database**  
+  Maintains failed logins, brute-force alerts, and threat intelligence cache.
+
+## Sample log
+
+- `auth_sample_40.log` — contains 20 suspicious and 20 normal entries for testing.
+
+## Requirements
 
 - Python 3.10+
 
 ### Install dependencies
-in root directory
-`pip install -r requirements.txt`
 
-### How to Run
-#### To analyze specific logs file
+in root directory
+
+```bash
+pip install -r requirements.txt
+```
+
+## How to Run
+
+### To analyze specific logs file
 in src directory -> `python main.py [path to log file]`
 
-ex. `python main.py --path-to-file .\samples\auth_sample_40.log`
+ex.
 
-It will:
+```bash
+python main.py --path-to-file .\samples\auth_sample_40.log
+```
 
-- process auth_sample_40.log
+Performs:
 
-- generate report.pdf with detected incidents.
+- file analysis,
+  
+- IP reputation enrichment via Threat Intelligence API,
+  
+- generates `report.pdf`.
 
-#### To monitor logs in real time
+### To monitor logs in real time
 in src directory -> `python -m src.main  --realtime --paths test.log`
 
-It will:
+ex.
 
-- monitor logs appeared in logs file ex. test.log
-- save failed logs into sqlite cache database
-- save details into alerts.json
+```bash
+python main.py --realtime --paths test.log
+```
+
+Performs:
+
+- real-time log stream monitoring,
+  
+- stores failed attempts in SQLite (`cache/failed_logins.db`),
+  
+- queries AbuseIPDB for IP reputation (cached),
+  
+- saves alerts to `alerts/alerts.json`.
+
+## Data Structure
+
+| Table | Description |
+|--------|-------------|
+| `failed_logins` | Records all failed login attempts |
+| `alerts_log` | Stores last brute-force alert timestamps |
+| `cache` | Stores cached Threat Intelligence data |
 
 ### Next steps
 
-- website with dashboard to data analysis
+- Add **Machine Learning Anomaly Detection**
+  
+- Build **Web Dashboard** (Streamlit / Dash)
