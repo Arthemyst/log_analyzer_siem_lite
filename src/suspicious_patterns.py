@@ -1,7 +1,7 @@
 import re
 from datetime import datetime
 
-from . import failed_logins
+import failed_logins
 
 failed_logins.init_db()
 
