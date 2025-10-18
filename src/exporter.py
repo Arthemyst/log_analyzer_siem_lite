@@ -2,116 +2,150 @@ import csv
 import json
 import logging
 import socket
+from logging.handlers import SysLogHandler
 from datetime import datetime
-from logging.handlers import SysLogHandler, RotatingFileHandler
-from pathlib import Path
-from typing import Optional, List
-import requests
-import os
-
-LOG_DIR = Path("logs")
-LOG_DIR.mkdir(exist_ok=True)
-
-LOG_FILE = LOG_DIR / "exporter.log"
+import re
 
 logger = logging.getLogger("Exporter")
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
+file_handler = logging.FileHandler("exporter.log")
+formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
-console_format = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
-console_handler.setFormatter(console_format)
 
-file_handler = RotatingFileHandler(LOG_FILE, maxBytes=1_000_000, backupCount=5, encoding="utf-8")
-file_handler.setLevel(logging.INFO)
-file_handler.setFormatter(console_format)
-
-if not logger.hasHandlers():
-    logger.addHandler(console_handler)
-    logger.addHandler(file_handler)
-
-EXPORT_DIR = Path("exports")
-EXPORT_DIR.mkdir(exist_ok=True)
-
-def export_alerts_to_csv(alerts: List[dict], filename: Optional[str] = None) -> Optional[Path]:
-    if not alerts:
-        logger.warning("[CSV] No alerts to export")
-        return None
-
-    if not filename:
-        filename = f"alerts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-
-    filepath = EXPORT_DIR / filename
-    fieldnames = list({k for a in alerts for k in a.keys()})
-
+def export_to_csv(alerts: list[dict], path: str = "exports/alerts.csv") -> None:
     try:
-        with open(filepath, "w", newline="", encoding="utf-8") as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        if not alerts:
+            logger.info("[EXPORT] No alerts to export.")
+            return
+
+        fieldnames = alerts[0].keys()
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
-            for alert in alerts:
-                writer.writerow(alert)
-        logger.info(f"[CSV] Exported {len(alerts)} alerts -> {filepath}")
-        return filepath
+            writer.writerows(alerts)
+        logger.info(f"[EXPORT] Alerts exported to CSV: {path}")
 
-    except (OSError, IOError) as e:
-        logger.error(f"[CSV] File write error: {e}")
-        return None
+    except FileNotFoundError:
+        logger.error(f"[EXPORT] Directory not found for CSV: {path}")
+    except PermissionError:
+        logger.error(f"[EXPORT] Permission denied writing CSV: {path}")
+    except Exception as e:
+        logger.error(f"[EXPORT] Unexpected error during CSV export: {type(e).__name__} - {e}")
 
 
-def export_alerts_to_json(alerts: List[dict], filename: Optional[str] = None) -> Optional[Path]:
-    if not alerts:
-        logger.warning("[JSON] No alerts to export")
-        return None
-
-    if not filename:
-        filename = f"alerts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-
-    filepath = EXPORT_DIR / filename
-
+def export_to_json(alerts: list[dict], path: str = "exports/alerts.json") -> None:
     try:
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(alerts, f, indent=4, ensure_ascii=False)
-        logger.info(f"[JSON] Exported {len(alerts)} alerts -> {filepath}")
-        return filepath
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(alerts, f, indent=4)
+        logger.info(f"[EXPORT] Alerts exported to JSON: {path}")
+    except (FileNotFoundError, PermissionError) as e:
+        logger.error(f"[EXPORT] File error during JSON export: {e}")
+    except TypeError as e:
+        logger.error(f"[EXPORT] Serialization error: {e}")
+    except Exception as e:
+        logger.error(f"[EXPORT] Unexpected error during JSON export: {type(e).__name__} - {e}")
 
-    except (OSError, IOError, TypeError) as e:
-        logger.error(f"[JSON] Export failed: {e}")
-        return None
 
-
-def format_rfc5424_message(alert: dict, hostname: str = None, app_name: str = "LogAnalyzer") -> str:
-    priority = 134
+def format_rfc5424_message(alert: dict, app_name: str = "LogAnalyzer") -> str:
+    """
+    Format alert dictionary into RFC 5424 Syslog message.
+    Example output:
+    <134>1 2025-10-18T18:00:00Z host LogAnalyzer 1234 ID99 [event@32473 user="root" src_ip="1.2.3.4"] message
+    """
+    pri = 134  # facility(16)*8 + severity(6)
     version = 1
-    timestamp = alert.get("timestamp", datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"))
-    hostname = hostname or socket.gethostname()
-    pid = os.getpid()
-    event_id = alert.get("event_id", "ID" + datetime.now().strftime("%H%M%S"))
+    timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    hostname = socket.gethostname()
+    procid = str(alert.get("pid", "-"))
+    msgid = "ALERT"
+    structured_data = f"[event@32473 src_ip=\"{alert.get('source', '-')}\"]"
+    message_text = alert.get("alert", "Unknown event")
 
-    user = alert.get("username", "unknown")
-    src_ip = alert.get("ip", "unknown")
-    event_type = alert.get("alert_type", "N/A")
-    score = alert.get("threat_intel", {}).get("abuse_Score", "N/A")
-
-    structured_data = f'[event@32473 user="{user}" src_ip="{src_ip}" type="{event_type}" score="{score}"]'
-    message_body = alert.get("description", alert.get("log", "No details provided"))
-
-    return f"<{priority}>{version} {timestamp} {hostname} {app_name} {pid} {event_id} {structured_data} {message_body}"
+    formatted_message = f"<{pri}>{version} {timestamp} {hostname} {app_name} {procid} {msgid} {structured_data} {message_text}"
+    return formatted_message
 
 
-def send_syslog_alert(alert: dict, server: str = "127.0.0.1", port: int = 514, use_tcp: bool = False, app_name: str = "LogAnalyzer") -> None:
+def extract_severity_from_message(message: str) -> int:
+    default_severity = 6
+    if not isinstance(message, str):
+        logger.debug("[SYSLOG] Non-string message passed; defaulting severity=6.")
+        return default_severity
+
+    if "<" not in message or ">" not in message:
+        logger.debug("[SYSLOG] Message missing PRI field; defaulting severity=6.")
+        return default_severity
+
     try:
-        socket_type = socket.SOCK_STREAM if use_tcp else socket.SOCK_DGRAM
-        handler = SysLogHandler(address=(server, port), socktype=socket_type)
-        sys_logger = logging.getLogger("RFC5424Forwarder")
-        sys_logger.setLevel(logging.INFO)
+        start = message.find("<")
+        end = message.find(">", start + 1)
+        if start == -1 or end == -1 or end <= start + 1:
+            logger.debug("[SYSLOG] Invalid PRI delimiters; defaulting severity=6.")
+            return default_severity
+
+        pri_part = message[start + 1:end].strip()
+        if not pri_part.isdigit():
+            logger.debug(f"[SYSLOG] Non-numeric PRI value '{pri_part}'; defaulting severity=6.")
+            return default_severity
+
+        pri_val = int(pri_part)
+        return pri_val % 8
+    except (ValueError, IndexError, TypeError) as e:
+        logger.debug(f"[SYSLOG] PRI parsing failed ({type(e).__name__}): {e}. Defaulting severity=6.")
+        return default_severity
+
+
+def validate_rfc5424_message(message: str) -> bool:
+    if not isinstance(message, str):
+        logger.debug("[SYSLOG] Non-string message passed to validation.")
+        return False
+
+    rfc5424_pattern = re.compile(
+        r"^<\d{1,3}>\d\s"
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\s"
+        r"[A-Za-z0-9\-\._]+\s"
+        r"[A-Za-z0-9\-\._]+\s"
+        r"[\d\-]+\s"
+        r"[A-Za-z0-9\-]+\s"
+        r"\[[^\]]*\]"
+    )
+
+    if not rfc5424_pattern.match(message):
+        logger.debug(f"[SYSLOG] RFC 5424 validation failed: {message[:80]}...")
+        return False
+
+    try:
+        timestamp_str = message.split(" ", 3)[2]
+        datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%SZ")
+    except (ValueError, IndexError):
+        logger.debug("[SYSLOG] Invalid or missing timestamp in message.")
+        return False
+
+    if "[" not in message or "]" not in message:
+        logger.debug("[SYSLOG] Missing structured data block [].")
+        return False
+
+    logger.debug("[SYSLOG] RFC 5424 validation passed.")
+    return True
+
+
+def send_syslog_alert(alert: dict, server: str = "127.0.0.1", port: int = 514, use_tcp: bool = False) -> None:
+    try:
+        message = format_rfc5424_message(alert)
+        if not validate_rfc5424_message(message):
+            logger.warning("[SYSLOG] Message skipped — failed RFC 5424 validation.")
+            return
+
+        socktype = socket.SOCK_STREAM if use_tcp else socket.SOCK_DGRAM
+        handler = SysLogHandler(address=(server, port), socktype=socktype)
+        sys_logger = logging.getLogger("SyslogForwarder")
         sys_logger.addHandler(handler)
-
-        message = format_rfc5424_message(alert, app_name=app_name)
+        sys_logger.setLevel(logging.INFO)
         sys_logger.info(message)
-
         handler.close()
         sys_logger.removeHandler(handler)
-        logger.info(f"[SYSLOG] RFC 5424 alert sent -> {server}:{port} ({'TCP' if use_tcp else 'UDP'})")
+        logger.info(f"[SYSLOG] Sent alert -> {server}:{port} ({'TCP' if use_tcp else 'UDP'})")
 
     except ConnectionRefusedError:
         logger.error(f"[SYSLOG] Connection refused: {server}:{port}")
@@ -120,66 +154,4 @@ def send_syslog_alert(alert: dict, server: str = "127.0.0.1", port: int = 514, u
     except OSError as e:
         logger.error(f"[SYSLOG] OS-level error: {e}")
     except Exception as e:
-        logger.exception(f"[SYSLOG] Unexpected error while sending Syslog: {e}")
-
-def send_alert_to_siem_api(
-        alert: dict,
-        siem_url: str,
-        token: Optional[str] = None,
-        timeout: int = 5
-):
-    headers = {"Content-Type": "application/json"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-
-    try:
-        response = requests.post(siem_url, headers=headers, json=alert, timeout=timeout)
-        response.raise_for_status()
-        logger.info(f"[SIEM-API] Sent alert -> {siem_url} ({response.status_code})")
-
-    except requests.exceptions.Timeout:
-        logger.error("[SIEM-API] Request timed out.")
-    except requests.exceptions.ConnectionError as e:
-        logger.error(f"[SIEM-API] Connection error: {e}")
-    except requests.exceptions.HTTPError as e:
-        logger.error(f"[SIEM-API] HTTP error: {e.response.status_code} {e.response.text[:200]}")
-    except requests.RequestException as e:
-        logger.error(f"[SIEM-API] Request failed: {e}")
-
-
-def export_all(
-        alerts: List[dict],
-        export_csv: bool = True,
-        export_json: bool = True,
-        export_syslog: bool = False,
-        export_siem_api: bool = False,
-        siem_server: str = "127.0.0.1",
-        siem_port: int = 514,
-        siem_url: Optional[str] = None,
-        siem_token: Optional[str] = None,
-        use_tcp_syslog: bool = False
-):
-    if not alerts:
-        logger.warning("[EXPORT] No alerts to export]")
-        return
-
-    logger.info(f"[EXPORT] Starting export of {len(alerts)} alerts...")
-
-    if export_csv:
-        export_alerts_to_csv(alerts)
-
-    if export_json:
-        export_alerts_to_json(alerts)
-
-    if export_syslog:
-        for alert in alerts:
-            send_syslog_alert(alert, siem_server, siem_port, use_tcp_syslog)
-
-    if export_siem_api:
-        if not siem_url:
-            logger.warning("[EXPORT] API export requested but no siem_url provided.")
-        else:
-            for alert in alerts:
-                send_alert_to_siem_api(alert, siem_url, siem_token)
-
-    logger.info("[EXPORT] All exports completed successfully.")
+        logger.error(f"[SYSLOG] Unexpected error: {type(e).__name__}: {e}")
