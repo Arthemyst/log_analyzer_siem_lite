@@ -1,7 +1,9 @@
+import os
+
 import typer
-from logs_analyzer import LogsAnalyzer
 
 from exporter import export_to_csv, export_to_json, send_syslog_alert
+from logs_analyzer import LogsAnalyzer
 
 app = typer.Typer(help="SIEM-lite Log Analyzer")
 DEFAULT_PATHS = ["./test.log"]
@@ -14,7 +16,9 @@ def analyze_logs(
         export_csv: bool = typer.Option(False, "--csv", help="Export alerts to CSV."),
         export_json: bool = typer.Option(False, "--json", help="Export alerts to JSON."),
         syslog: bool = typer.Option(False, "--syslog", help="Forward alerts to Syslog server."),
-        generate_report: bool = typer.Option(False, "--report", "-p", help="Generate PDF report after analysis.")
+        generate_report: bool = typer.Option(False, "--report", "-p", help="Generate PDF report after analysis."),
+        report_path: str = typer.Option("report.pdf", "--report-path", "-rp",
+                                        help="Custom path for generated PDF report.")
 ) -> None:
     if realtime:
         typer.echo("[INFO] Starting real-time log monitoring...")
@@ -36,7 +40,9 @@ def analyze_logs(
 
     if generate_report:
         typer.echo("[INFO] Generating PDF report...")
+        os.makedirs(os.path.dirname(report_path), exist_ok=True)
         LogsAnalyzer.generate_pdf_report(alerts)
+        typer.echo(f"[INFO] Report saved: {report_path}")
 
     if export_csv:
         typer.echo("[INFO] Exporting alerts to CSV...")

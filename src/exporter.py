@@ -8,11 +8,15 @@ import re
 
 logger = logging.getLogger("Exporter")
 logger.setLevel(logging.DEBUG)
+
 file_handler = logging.FileHandler("exporter.log")
 formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
 
 def export_to_csv(alerts: list[dict], path: str = "exports/alerts.csv") -> None:
     try:
@@ -108,17 +112,21 @@ def validate_rfc5424_message(message: str) -> bool:
         r"[A-Za-z0-9\-\._]+\s"
         r"[\d\-]+\s"
         r"[A-Za-z0-9\-]+\s"
-        r"\[[^\]]*\]"
+        r"\[[^\]]*\].*"
     )
 
     if not rfc5424_pattern.match(message):
         logger.debug(f"[SYSLOG] RFC 5424 validation failed: {message[:80]}...")
         return False
 
+    timestamp_match = re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", message)
+    if not timestamp_match:
+        logger.debug("[SYSLOG] Invalid or missing timestamp in message.")
+        return False
+
     try:
-        timestamp_str = message.split(" ", 3)[2]
-        datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%SZ")
-    except (ValueError, IndexError):
+        datetime.strptime(timestamp_match.group(0), "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
         logger.debug("[SYSLOG] Invalid or missing timestamp in message.")
         return False
 
