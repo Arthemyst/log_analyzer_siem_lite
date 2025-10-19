@@ -76,11 +76,9 @@ def export_to_json(alerts: list[dict], path: str = "exports/alerts.json") -> Non
 
     except (OSError, IOError) as e:
         logger.error(f"[EXPORT] Unexpected error during JSON export: {type(e).__name__} - {e}")
-        try:
-            if 'temp_name' in locals() and os.path.exists(temp_name):
-                os.remove(temp_name)
-        except Exception:
-            pass
+        if 'temp_name' in locals() and os.path.exists(temp_name):
+            os.remove(temp_name)
+
 
 
 def format_rfc5424_message(alert: dict, app_name: str = "LogAnalyzer") -> str:
