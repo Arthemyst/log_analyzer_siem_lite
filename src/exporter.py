@@ -1,10 +1,12 @@
 import csv
 import json
 import logging
-import socket
-from logging.handlers import SysLogHandler
-from datetime import datetime
+import os
 import re
+import socket
+import tempfile
+from datetime import datetime
+from logging.handlers import SysLogHandler
 
 logger = logging.getLogger("Exporter")
 logger.setLevel(logging.DEBUG)
@@ -17,6 +19,7 @@ logger.addHandler(file_handler)
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
+
 
 def export_to_csv(alerts: list[dict], path: str = "exports/alerts.csv") -> None:
     try:
@@ -41,15 +44,34 @@ def export_to_csv(alerts: list[dict], path: str = "exports/alerts.csv") -> None:
 
 def export_to_json(alerts: list[dict], path: str = "exports/alerts.json") -> None:
     try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(alerts, f, indent=4)
+        if not alerts:
+            logger.info("[EXPORT] No alerts to export.")
+            return
+        try:
+            payload = json.dumps(alerts, indent=4, ensure_ascii=False)
+        except (TypeError, ValueError) as e:
+            logger.error(f"[EXPORT] Failed to export alerts: {e}")
+            return
+
+        target_dir = os.path.dirname(path) or "."
+        os.makedirs(target_dir, exist_ok=True)
+
+        dir_for_temp = target_dir
+        with tempfile.NamedTemporaryFile("w", delete=False, dir=dir_for_temp, encoding="utf-8") as tmpf:
+            tmpf.write(payload)
+            temp_name = tmpf.name
+
+        os.replace(temp_name, path)
+
         logger.info(f"[EXPORT] Alerts exported to JSON: {path}")
-    except (FileNotFoundError, PermissionError) as e:
-        logger.error(f"[EXPORT] File error during JSON export: {e}")
-    except TypeError as e:
-        logger.error(f"[EXPORT] Serialization error: {e}")
-    except Exception as e:
+
+    except (OSError, IOError) as e:
         logger.error(f"[EXPORT] Unexpected error during JSON export: {type(e).__name__} - {e}")
+        try:
+            if 'temp_name' in locals() and os.path.exists(temp_name):
+                os.remove(temp_name)
+        except Exception:
+            pass
 
 
 def format_rfc5424_message(alert: dict, app_name: str = "LogAnalyzer") -> str:
@@ -60,7 +82,7 @@ def format_rfc5424_message(alert: dict, app_name: str = "LogAnalyzer") -> str:
     """
     pri = 134  # facility(16)*8 + severity(6)
     version = 1
-    timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
     hostname = socket.gethostname()
     procid = str(alert.get("pid", "-"))
     msgid = "ALERT"
@@ -94,6 +116,11 @@ def extract_severity_from_message(message: str) -> int:
             return default_severity
 
         pri_val = int(pri_part)
+        # RFC 5424 valid PRI range is 0–191
+        if not (0 <= pri_val <= 191):
+            logger.debug(f"[SYSLOG] Out-of-range PRI value '{pri_val}'; defaulting severity=6.")
+            return default_severity
+
         return pri_val % 8
     except (ValueError, IndexError, TypeError) as e:
         logger.debug(f"[SYSLOG] PRI parsing failed ({type(e).__name__}): {e}. Defaulting severity=6.")
