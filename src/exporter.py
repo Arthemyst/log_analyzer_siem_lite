@@ -22,25 +22,34 @@ logger.addHandler(console_handler)
 
 
 def export_to_csv(alerts: list[dict], path: str = "exports/alerts.csv") -> None:
-    try:
-        if not alerts:
-            logger.info("[EXPORT] No alerts to export.")
-            return
+    if not alerts:
+        logger.info("[EXPORT] No alerts to export.")
+        return
 
-        fieldnames = alerts[0].keys()
-        with open(path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
+    try:
+        target_dir = os.path.dirname(path) or "."
+        os.makedirs(target_dir, exist_ok=True)
+
+        fieldnames = list(alerts[0].keys())
+
+        with tempfile.NamedTemporaryFile("w", delete=False, dir=target_dir, newline="", encoding="utf-8") as tmpf:
+            writer = csv.DictWriter(tmpf, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(alerts)
+            temp_name = tmpf.name
+
+        os.replace(temp_name, path)
+
         logger.info(f"[EXPORT] Alerts exported to CSV: {path}")
 
-    except FileNotFoundError:
-        logger.error(f"[EXPORT] Directory not found for CSV: {path}")
-    except PermissionError:
-        logger.error(f"[EXPORT] Permission denied writing CSV: {path}")
+    except (OSError, IOError) as e:
+        logger.error(f"[EXPORT] File error during CSV export: {e}")
+        if 'temp_name' in locals() and os.path.exists(temp_name):
+            os.remove(temp_name)
     except Exception as e:
         logger.error(f"[EXPORT] Unexpected error during CSV export: {type(e).__name__} - {e}")
-
+        if 'temp_name' in locals() and os.path.exists(temp_name):
+            os.remove(temp_name)
 
 def export_to_json(alerts: list[dict], path: str = "exports/alerts.json") -> None:
     try:
