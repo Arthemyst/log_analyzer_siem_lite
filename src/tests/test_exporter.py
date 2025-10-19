@@ -43,6 +43,11 @@ def test_export_to_csv_empty_list(tmp_path):
     export_to_csv([], str(csv_path))
     assert not csv_path.exists()
 
+def test_export_to_csv_invalid_path(sample_alerts):
+    invalid_path = "Z:/nonexistent_dir/alerts.csv"  # unlikely to exist on most systems
+    export_to_csv(sample_alerts, invalid_path)
+    assert not os.path.exists(invalid_path)
+
 def test_export_to_json_creates_file(tmp_path, sample_alerts):
     json_path = tmp_path / "alerts.json"
     export_to_json(sample_alerts, str(json_path))
