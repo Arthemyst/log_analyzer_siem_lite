@@ -1,9 +1,9 @@
-import os
 import json
+import os
 import socket
-import logging
+
 import pytest
-from pathlib import Path
+
 from src.exporter import (
     export_to_csv,
     export_to_json,
@@ -12,6 +12,7 @@ from src.exporter import (
     extract_severity_from_message,
     send_syslog_alert,
 )
+
 
 @pytest.fixture
 def sample_alert():
@@ -22,12 +23,14 @@ def sample_alert():
         "pid": 1234,
     }
 
+
 @pytest.fixture
 def sample_alerts():
     return [
         {"timestamp": "2025-10-18 22:00:00", "source": "192.168.1.10", "alert": "Failed login attempt"},
         {"timestamp": "2025-10-18 22:01:00", "source": "10.0.0.1", "alert": "Brute-force detected"},
     ]
+
 
 def test_export_to_csv_creates_file(tmp_path, sample_alerts):
     csv_path = tmp_path / "alerts.csv"
@@ -38,15 +41,18 @@ def test_export_to_csv_creates_file(tmp_path, sample_alerts):
     assert "timestamp" in content
     assert "Failed login attempt" in content
 
+
 def test_export_to_csv_empty_list(tmp_path):
     csv_path = tmp_path / "alerts.csv"
     export_to_csv([], str(csv_path))
     assert not csv_path.exists()
 
+
 def test_export_to_csv_invalid_path(sample_alerts):
     invalid_path = "Z:/nonexistent_dir/alerts.csv"  # unlikely to exist on most systems
     export_to_csv(sample_alerts, invalid_path)
     assert not os.path.exists(invalid_path)
+
 
 def test_export_to_json_creates_file(tmp_path, sample_alerts):
     json_path = tmp_path / "alerts.json"
@@ -57,11 +63,13 @@ def test_export_to_json_creates_file(tmp_path, sample_alerts):
     assert isinstance(data, list)
     assert data[0]["alert"] == "Failed login attempt"
 
+
 def test_export_to_json_invalid_data(tmp_path):
     json_path = tmp_path / "alerts.json"
     invalid_data = [{"alert": lambda x: x}]
     export_to_json(invalid_data, str(json_path))
     assert not json_path.exists()
+
 
 def test_format_rfc5424_message_valid(sample_alert):
     message = format_rfc5424_message(sample_alert)
@@ -69,31 +77,38 @@ def test_format_rfc5424_message_valid(sample_alert):
     assert "LogAnalyzer" in message
     assert "[event@32473" in message
 
+
 def test_format_rfc5424_message_missing_fields():
     alert = {}
     msg = format_rfc5424_message(alert)
     assert "<134>1" in msg
     assert "Unknown event" in msg
 
+
 def test_validate_rfc5424_message_valid(sample_alert):
     message = format_rfc5424_message(sample_alert)
     assert validate_rfc5424_message(message) is True
+
 
 def test_validate_rfc5424_message_invalid_structure():
     msg = "<134>Not an RFC message"
     assert validate_rfc5424_message(msg) is False
 
+
 def test_validate_rfc5424_message_invalid():
     invalid_message = "Not a syslog message"
     assert validate_rfc5424_message(invalid_message) is False
+
 
 def test_extract_severity_from_message_valid():
     message = "<134>1 2025-10-18T00:00:00Z host app 1234 ALERT [data] something happened"
     assert extract_severity_from_message(message) == 6  # 134 % 8 = 6
 
+
 def test_extract_severity_from_message_invalid():
     message = "Missing angle brackets"
     assert extract_severity_from_message(message) == 6
+
 
 def test_extract_severity_from_message_invalid_values():
     msgs = [
@@ -136,8 +151,7 @@ def test_send_syslog_alert_invalid_host(sample_alert):
 
 
 def test_send_syslog_alert_invalid_message(monkeypatch, sample_alert):
-    """Simulate invalid RFC message to trigger validation failure"""
-    monkeypatch.setattr("exporter.validate_rfc5424_message", lambda _: False)
+    monkeypatch.setattr("src.exporter.validate_rfc5424_message", lambda _: False)
 
     result = send_syslog_alert(sample_alert, server="127.0.0.1", port=5514)
     assert result is None  # function should exit silently without raising error

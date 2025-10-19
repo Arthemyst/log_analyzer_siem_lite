@@ -1,5 +1,6 @@
 typer
 pytest
+pytest-cov
 fpdf
 aiofiles
 aiohttp

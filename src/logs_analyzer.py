@@ -1,7 +1,7 @@
-from generate_report import generate_pdf_report
-from monitor import start_monitor
-from suspicious_patterns import detect_suspicious_entries
-from utils import load_log_file
+from .generate_report import generate_pdf_report
+from .monitor import start_monitor
+from .suspicious_patterns import detect_suspicious_entries
+from .utils import load_log_file
 
 
 class LogsAnalyzer:

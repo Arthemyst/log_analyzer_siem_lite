@@ -6,8 +6,8 @@ from typing import Optional
 import re
 import aiofiles
 
-from suspicious_patterns import detect_suspicious_entries
-from threat_intel import fetch_ip_info, severity_from_score
+from .suspicious_patterns import detect_suspicious_entries
+from .threat_intel import fetch_ip_info, severity_from_score
 
 ALERTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "alerts")
 ALERT_JSON = os.path.join(ALERTS_DIR, "alerts.json")

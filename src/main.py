@@ -2,8 +2,8 @@ import os
 
 import typer
 
-from exporter import export_to_csv, export_to_json, send_syslog_alert
-from logs_analyzer import LogsAnalyzer
+from .exporter import export_to_csv, export_to_json, send_syslog_alert
+from .logs_analyzer import LogsAnalyzer
 
 app = typer.Typer(help="SIEM-lite Log Analyzer")
 DEFAULT_PATHS = ["./test.log"]
