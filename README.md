@@ -34,7 +34,7 @@ Narzędzie wykrywa i klasyfikuje potencjalne incydenty bezpieczeństwa w logach 
   - ostatnie alerty brute-force (`alerts_log`)
   - dane reputacyjne IP (`cache`)
 
-## 🧪 Testy i pokrycie kodu
+## Testy i pokrycie kodu
 
 Projekt zawiera zestaw testów jednostkowych (`pytest`) obejmujący:
 - analizę logów (`suspicious_patterns.py`)
@@ -55,7 +55,7 @@ Projekt zawiera zestaw testów jednostkowych (`pytest`) obejmujący:
 
 Raport pokaże procentowe pokrycie testami oraz pliki, które wymagają dodatkowych testów.
 
-## 🧩 Struktura projektu
+## Struktura projektu
 
 ```
 src/
