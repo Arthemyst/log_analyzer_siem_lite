@@ -50,7 +50,7 @@ def test_true_brute_force_detection():
         "2025 Jun 11 11:01:00 server sshd[11114]: Failed password for admin from 10.0.0.1 port 54324 ssh2",
         "2025 Jun 11 11:01:20 server sshd[11115]: Failed password for admin from 10.0.0.1 port 54325 ssh2"
     ]
-    alerts = detect_suspicious_entries(logs)
+    alerts = detect_suspicious_entries(logs, brute_force_threshold=5, brute_force_window=120)
     brute_force_alerts = [a for a in alerts if "Brute-force pattern detected" in a[0]]
     assert len(brute_force_alerts) >= 1
 
