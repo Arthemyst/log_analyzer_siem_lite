@@ -5,6 +5,14 @@
 **Log Analyzer (SIEM-lite)** to lekki analizator logów systemowych w Pythonie, inspirowany systemami klasy **SIEM (Security Information and Event Management)**.  
 Narzędzie wykrywa i klasyfikuje potencjalne incydenty bezpieczeństwa w logach SSH, wzbogacając je o dane z zewnętrznych źródeł **Threat Intelligence**.
 
+Projekt zawiera:
+- analizator logów,
+- walidator RFC 5424,
+- eksport danych (CSV / JSON / Syslog),
+- asynchroniczny Syslog Receiver (UDP + TCP),
+- pipeline łączący Syslog → Analyzer,
+- generowanie raportów PDF.
+
 ## Funkcje
 
 - **Monitorowanie logów w czasie rzeczywistym**  
@@ -22,9 +30,13 @@ Narzędzie wykrywa i klasyfikuje potencjalne incydenty bezpieczeństwa w logach 
   Możliwość zapisu alertów do:
   - **CSV**
   - **JSON**
-  - **Syslog (RFC 5424 compliant)** — możliwość wysyłania alertów do zewnętrznego serwera SIEM przez UDP/TCP.  
-    (np. `send_syslog_alert(alert, server="127.0.0.1", port=514)`)
-
+  - **Syslog RFC 5424**
+    - formatowanie wiadomości RFC 5424,
+    - walidacja strukturalna (bez regex),
+    - wysyłanie przez UDP lub TCP
+      ```
+      send_syslog_alert(alert, server="127.0.0.1", port=514)
+      ```
 - **Generowanie raportów PDF**  
   Automatyczne tworzenie raportów z incydentami, danymi reputacyjnymi i znacznikami czasu.
 
@@ -37,9 +49,10 @@ Narzędzie wykrywa i klasyfikuje potencjalne incydenty bezpieczeństwa w logach 
 ## Testy i pokrycie kodu
 
 Projekt zawiera zestaw testów jednostkowych (`pytest`) obejmujący:
-- analizę logów (`suspicious_patterns.py`)
-- eksport danych (`exporter.py`)
-- obsługę sysloga i walidację RFC 5424
+- analizy logów i wykrywania incydentów
+- eksportera (CSV/JSON/Syslog)
+- walidacji RFC 5424
+- integracji parsowania
 
 ### Uruchamianie testów
 
@@ -59,14 +72,16 @@ Raport pokaże procentowe pokrycie testami oraz pliki, które wymagają dodatkow
 
 ```
 src/
- ├── main.py                     # Główne CLI (typer)
- ├── log_analyzer.py             # Analiza plików i monitorowanie w czasie rzeczywistym
- ├── suspicious_patterns.py      # Wykrywanie brute-force i incydentów SSH
- ├── failed_logins_db.py         # Obsługa bazy SQLite
- ├── threat_intel.py             # Integracja z AbuseIPDB API
- ├── exporter.py                 # Eksport CSV / JSON / Syslog
- ├── generate_report.py          # Generowanie raportów PDF
- └── utils.py                    # Pomocnicze funkcje
+ ├── main.py                 # CLI (typer)
+ ├── logs_analyzer.py        # Log Analyzer wrapper
+ ├── suspicious_patterns.py  # Wykrywanie incydentów SSH
+ ├── failed_logins_db.py     # Baza SQLite
+ ├── threat_intel.py         # Integracja AbuseIPDB
+ ├── exporter.py             # Eksport CSV / JSON / Syslog RFC5424
+ ├── syslog_receiver.py      # Asynchroniczny Syslog UDP/TCP receiver
+ ├── syslog_pipeline.py      # Pipeline Syslog → Analyzer
+ ├── generate_report.py      # Raporty PDF
+ └── utils.py                # Pomocnicze funkcje
 tests/
  ├── test_exporter.py
  └── test_suspicious_patterns.py
@@ -88,23 +103,24 @@ tests/
 
 ### Analiza pojedynczego pliku logów
 ```bash
-  python src.main.py --file ./samples/auth_sample_40.log --generate-report
+  python -m src.main.py --file ./samples/auth_sample_40.log --report
 ```
 
 - analizuje plik logów,  
 - wzbogaca dane o reputację IP,  
 - generuje raport `report.pdf`.
+- opcjonalnie eksport do CSV/JSON
 
 ### Monitorowanie logów w czasie rzeczywistym
 
 ```bash
-  python src.main.py --realtime --paths test.log
+  python -m src.main.py --realtime --paths test.log
 ```
 - obserwuje plik logów w czasie rzeczywistym,  
 - zapisuje próby logowania do SQLite (`cache/failed_logins.db`),  
 - pobiera reputację IP z AbuseIPDB (cacheowane),  
 - zapisuje alerty w `alerts/alerts.json`,  
-- opcjonalnie wysyła alerty do serwera Syslog/
+- opcjonalnie wysyła alerty do serwera Syslog.
 
 ## Struktura danych (SQLite)
 | Tabela | Opis |
@@ -113,10 +129,27 @@ tests/
 | `alerts_log` | Ostatnie alerty brute-force |
 | `cache` | Bufor reputacji IP (Threat Intelligence) |
 
+## Syslog Receiver (UDP + TCP)
+
+### Uruchamianie:
+```
+  python -m src.main syslog --udp-port 514 --tcp-port 514 --host 0.0.0.0
+```
+
+### Serwer obsługuje:
+- Syslog UDP (RFC 5424)
+- Syslog TCP z framingiem (length-prefixed)
+- integrację z pipeline
+
+### Pipeline automatycznie przekieruje alerty do:
+- LogsAnalyzer
+- eksportera
+- dalszego przetwarzania (opcjonalnie: Threat Intel, PDF, syslog forward)
+
+
 ## Następne kroki
 - **Machine Learning Anomaly Detection** – automatyczne wykrywanie nietypowych wzorców
 - **Web Dashboard** – wizualizacja danych (Streamlit / Dash)
-- **Syslog Receiver Module** – prosty odbiornik testowy dla alertów Syslog  
   
 # 🇬🇧 Log Analyzer (SIEM-lite)
 
@@ -125,17 +158,56 @@ tests/
 **Log Analyzer (SIEM-lite)** is a lightweight Python-based log analyzer inspired by SIEM systems.  
 It detects, classifies, and enriches security incidents in SSH logs with data from **Threat Intelligence APIs**.
 
+The project integrates:
+
+- Log file analysis (batch & real-time)
+- Threat Intelligence (AbuseIPDB)
+- RFC 5424 message generation + validation
+- CSV / JSON exporting
+- Syslog forwarding
+- Asynchronous Syslog Receiver
+- Syslog Pipeline
+- PDF reporting
+
 ## Features
 
-- **Real-time Log Monitoring** (`aiofiles`, `asyncio`)
-- **Brute-force Detection** – detects ≥5 failed login attempts within a time window
-- **Threat Intelligence API (AbuseIPDB)** – fetches IP reputation, cached locally
-- **Exporter Module** – exports alerts to:
-  - CSV
-  - JSON
-  - Syslog (RFC 5424 structured messages)
-- **PDF Reporting** – generates detailed security incident reports
-- **Persistent SQLite Storage** – stores login attempts, alerts, and cached intelligence data
+### Log Analysis
+- Detection of failed SSH logins, root login attempts, brute-force attempts  
+- Timestamp-aware windowing logic
+
+### Real-time Monitoring
+- Non-blocking monitoring using asyncio and aiofiles
+
+### Threat Intelligence (AbuseIPDB)
+- Automated IP reputation lookup  
+- Cached results stored in SQLite
+
+### Exporter Module
+Exports alerts to:
+- **CSV**
+- **JSON**
+- **Syslog (RFC 5424)**  
+  Includes strict RFC 5424 validator.
+
+### Syslog Receiver (UDP + TCP)
+- Async UDP + TCP Syslog server  
+- Supports **octet-counting framing (RFC 6587)**  
+- Validates incoming messages with RFC 5424 validator  
+- Forwards parsed alerts to LogsAnalyzer through SyslogPipeline
+
+### Syslog Pipeline
+- Parses RFC 5424 fields  
+- Extracts timestamp, structured data, PID, app name, IP, and log message  
+- Sends normalized alert objects to LogsAnalyzer
+
+### PDF Reporting
+- Generates structured PDF incident reports
+
+### SQLite Persistence
+Used to store:
+- `failed_logins`
+- `alerts_log`
+- `cache` (Threat Intelligence data)
 
 ## Testing
 
@@ -188,7 +260,7 @@ in root directory
 
 ### To analyze specific logs file
 ```bash
-  python src.main.py -file ./samples/auth_sample_40.log --generate-report
+  python -m src.main analyze --file ./samples/auth_sample_40.log --report
 ```
 
 Performs:
@@ -196,9 +268,9 @@ Performs:
 - IP reputation enrichment via Threat Intelligence API,
 - generates `report.pdf`.
 
-### To monitor logs in real time
+### Real-time monitoring
 ```bash
-  python src.main.py --realtime --paths test.log
+  python -m src.main analyze --realtime --paths test.log
 ```
 
 Performs:
@@ -214,7 +286,13 @@ Performs:
 | `alerts_log` | Stores last brute-force alert timestamps |
 | `cache` | Stores cached Threat Intelligence data |
 
+## Syslog Receiver
+
+### Start Syslog Receiver
+```bash
+  python -m src.main syslog --udp-port 514 --tcp-port 514 --host 0.0.0.0
+```
+
 ### Next steps
 - Add **Machine Learning Anomaly Detection**
 - Build **Web Dashboard** (Streamlit / Dash)
-- Develop **Syslog Receiver** for local testing
