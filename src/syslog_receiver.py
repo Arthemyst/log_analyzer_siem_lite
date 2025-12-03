@@ -60,3 +60,35 @@ class SyslogTCPClientHandler(asyncio.Protocol):
             self.buffer = rest[msg_len:]
 
             asyncio.create_task(process_syslog_message(raw_msg, "TCP"))
+
+async def run_syslog_receiver(
+        udp_port: int = 514,
+        tcp_port: int = 514,
+        host: str = "0.0.0.0",
+):
+    loop = asyncio.get_running_loop()
+
+    #UDP
+    logger.info(f"[START] Starting UDP syslog server on {host}:{udp_port}")
+    udp_transport, _ = await loop.create_datagram_endpoint(
+        lambda: SyslogUDPProtocol(),
+        local_addr=(host, udp_port),
+    )
+
+    #TCP
+    logger.info(f"[START] Starting TCP syslog server on {host}:{tcp_port}")
+    tcp_server = await loop.create_server(
+        lambda: SyslogTCPClientHandler(),
+        host,
+        tcp_port,
+    )
+
+    async with tcp_server:
+        logger.info(f"[READY] Syslog receiver running (UDP + TCP).")
+        await tcp_server.serve_forever()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(run_syslog_receiver())
+    except KeyboardInterrupt:
+        logger.info(f"[STOP] Syslog receiver stopped manually.")
