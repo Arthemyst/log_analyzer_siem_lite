@@ -2,10 +2,8 @@ import csv
 import json
 import logging
 import os
-import re
 import socket
 import tempfile
-from datetime import datetime
 from logging.handlers import SysLogHandler
 
 logger = logging.getLogger("Exporter")
@@ -19,6 +17,94 @@ logger.addHandler(file_handler)
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
+
+from datetime import datetime
+
+
+class RFC5424ValidationError(Exception):
+    pass
+
+
+def _parse_pri_block(pri_text: str) -> int:
+    if not pri_text.startswith("<") or ">" not in pri_text:
+        raise RFC5424ValidationError("PRI block malformed or missing")
+
+    number = pri_text[1: pri_text.find(">")]
+    if not number.isdigit():
+        raise RFC5424ValidationError(f"PRI field is not numeric: {number}")
+
+    pri = int(number)
+    if not (0 <= pri <= 191):
+        raise RFC5424ValidationError(f"PRI value out of range: {pri}")
+
+    return pri
+
+
+def _parse_timestamp(ts: str) -> datetime:
+    try:
+        return datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError as e:
+        raise RFC5424ValidationError(f"Invalid timestamp: {e}")
+
+
+def _split_with_structured_data(msg: str) -> list:
+    parts = []
+    current = []
+    inside_sd = False
+
+    for ch in msg:
+        if ch == "[":
+            inside_sd = True
+        if ch == "]":
+            inside_sd = False
+
+        if ch == " " and not inside_sd:
+            parts.append("".join(current))
+            current = []
+        else:
+            current.append(ch)
+    if current:
+        parts.append("".join(current))
+    return parts
+
+
+def validate_rfc5424_message(message: str) -> bool:
+    try:
+        if not isinstance(message, str):
+            logger.debug("[RFC5424] Message must be string.")
+            return False
+
+        pri_end = message.find(">")
+        if pri_end == -1:
+            return False
+
+        pri_block = message[:pri_end + 1]
+        pri = _parse_pri_block(pri_block)
+
+        msg = message[pri_end + 1:].strip()
+        parts = _split_with_structured_data(msg)
+
+        if len(parts) < 7:
+            logger.debug("[RFC5424] Too few fields.")
+            return False
+
+        version, timestamp, hostname, appname, procid, msgid, sd = parts[:7]
+
+        if version != "1":
+            logger.debug("[RFC5424] VERSION must be 1.")
+            return False
+
+        _parse_timestamp(timestamp)
+
+        if not (sd.startswith("[") and sd.endswith("]")):
+            logger.debug("[RFC5424] Structured-data block missing or malformed.")
+            return False
+
+        return True
+
+    except RFC5424ValidationError as e:
+        logger.debug(f"[RFC5424] Validation error: {e}")
+        return False
 
 
 def export_to_csv(alerts: list[dict], path: str = "exports/alerts.csv") -> None:
@@ -51,6 +137,7 @@ def export_to_csv(alerts: list[dict], path: str = "exports/alerts.csv") -> None:
         if 'temp_name' in locals() and os.path.exists(temp_name):
             os.remove(temp_name)
 
+
 def export_to_json(alerts: list[dict], path: str = "exports/alerts.json") -> None:
     try:
         if not alerts:
@@ -78,7 +165,6 @@ def export_to_json(alerts: list[dict], path: str = "exports/alerts.json") -> Non
         logger.error(f"[EXPORT] Unexpected error during JSON export: {type(e).__name__} - {e}")
         if 'temp_name' in locals() and os.path.exists(temp_name):
             os.remove(temp_name)
-
 
 
 def format_rfc5424_message(alert: dict, app_name: str = "LogAnalyzer") -> str:
@@ -132,44 +218,6 @@ def extract_severity_from_message(message: str) -> int:
     except (ValueError, IndexError, TypeError) as e:
         logger.debug(f"[SYSLOG] PRI parsing failed ({type(e).__name__}): {e}. Defaulting severity=6.")
         return default_severity
-
-
-def validate_rfc5424_message(message: str) -> bool:
-    if not isinstance(message, str):
-        logger.debug("[SYSLOG] Non-string message passed to validation.")
-        return False
-
-    rfc5424_pattern = re.compile(
-        r"^<\d{1,3}>\d\s"
-        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\s"
-        r"[A-Za-z0-9\-\._]+\s"
-        r"[A-Za-z0-9\-\._]+\s"
-        r"[\d\-]+\s"
-        r"[A-Za-z0-9\-]+\s"
-        r"\[[^\]]*\].*"
-    )
-
-    if not rfc5424_pattern.match(message):
-        logger.debug(f"[SYSLOG] RFC 5424 validation failed: {message[:80]}...")
-        return False
-
-    timestamp_match = re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", message)
-    if not timestamp_match:
-        logger.debug("[SYSLOG] Invalid or missing timestamp in message.")
-        return False
-
-    try:
-        datetime.strptime(timestamp_match.group(0), "%Y-%m-%dT%H:%M:%SZ")
-    except ValueError:
-        logger.debug("[SYSLOG] Invalid or missing timestamp in message.")
-        return False
-
-    if "[" not in message or "]" not in message:
-        logger.debug("[SYSLOG] Missing structured data block [].")
-        return False
-
-    logger.debug("[SYSLOG] RFC 5424 validation passed.")
-    return True
 
 
 def send_syslog_alert(alert: dict, server: str = "127.0.0.1", port: int = 514, use_tcp: bool = False) -> None:
