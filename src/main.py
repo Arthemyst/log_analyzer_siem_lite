@@ -1,32 +1,29 @@
+import asyncio
 import os
 
 import typer
 
-from .exporter import export_to_csv, export_to_json, send_syslog_alert
-from .logs_analyzer import LogsAnalyzer
+from src.exporter import export_to_csv, export_to_json, send_syslog_alert
+from src.logs_analyzer import LogsAnalyzer
+import src.syslog_receiver as syslog_receiver
+from src.syslog_pipeline import SyslogPipeline
 
 app = typer.Typer(help="SIEM-lite Log Analyzer")
 DEFAULT_PATHS = ["./test.log"]
 
 
-@app.command()
+@app.command("analyze")
 def analyze_logs(
         file: str = typer.Option(None, "--file", "-f", help="Path to log file to analyze."),
-        realtime: bool = typer.Option(False, "--realtime", "-r", help="Enable real-time monitoring mode."),
         export_csv: bool = typer.Option(False, "--csv", help="Export alerts to CSV."),
         export_json: bool = typer.Option(False, "--json", help="Export alerts to JSON."),
         syslog: bool = typer.Option(False, "--syslog", help="Forward alerts to Syslog server."),
-        generate_report: bool = typer.Option(False, "--report", "-p", help="Generate PDF report after analysis."),
+        generate_report: bool = typer.Option(False, "--report", "-p", help="Generate PDF report."),
         report_path: str = typer.Option("report.pdf", "--report-path", "-rp",
-                                        help="Custom path for generated PDF report.")
+                                        help="Path to save PDF report.")
 ) -> None:
-    if realtime:
-        typer.echo("[INFO] Starting real-time log monitoring...")
-        LogsAnalyzer.start_realtime_monitoring(DEFAULT_PATHS)
-        return
-
     if not file:
-        typer.echo("[ERROR] Please specify a log file with --file or use --realtime for live monitoring.")
+        typer.echo("[ERROR] Use --file <path> to analyze a log file.")
         raise typer.Exit()
 
     typer.echo(f"[INFO] Analyzing file: {file}")
@@ -40,26 +37,61 @@ def analyze_logs(
 
     if generate_report:
         typer.echo("[INFO] Generating PDF report...")
-        os.makedirs(os.path.dirname(report_path), exist_ok=True)
+        os.makedirs(os.path.dirname(report_path) or ".", exist_ok=True)
         LogsAnalyzer.generate_pdf_report(alerts)
         typer.echo(f"[INFO] Report saved: {report_path}")
 
     if export_csv:
         typer.echo("[INFO] Exporting alerts to CSV...")
         export_to_csv(alerts)
+
     if export_json:
         typer.echo("[INFO] Exporting alerts to JSON...")
         export_to_json(alerts)
+
     if syslog:
         typer.echo("[INFO] Sending alerts to Syslog server...")
-        for alert in alerts:
+        for name, log_line in alerts:
             send_syslog_alert({
                 "source": file,
-                "alert": alert[0],
-                "log": alert[1]
+                "alert": name,
+                "log": log_line,
             })
 
     typer.echo("[INFO] Analysis completed successfully.")
+
+
+@app.command("realtime")
+def realtime_monitor(
+        paths: str = typer.Option(None, "--paths", "-p",
+                                  help="Comma-separated list of files to monitor (tail -f style).")
+):
+    path_list = [p.strip() for p in paths.split(",")] if paths else DEFAULT_PATHS
+
+    typer.echo(f"[INFO] Starting realtime monitoring for: {path_list}")
+    LogsAnalyzer.start_realtime_monitoring(path_list)
+
+
+@app.command("syslog")
+def syslog_receiver_command(
+        udp_port: int = typer.Option(514, "--udp-port", help="UDP port for Syslog receiver"),
+        tcp_port: int = typer.Option(514, "--tcp-port", help="TCP port for Syslog receiver"),
+        host: str = typer.Option("0.0.0.0", "--host", help="Bind address"),
+):
+    typer.echo(f"[INFO] Starting Syslog Receiver on {host} (UDP:{udp_port}, TCP:{tcp_port})")
+
+    analyzer = LogsAnalyzer()
+    pipeline = SyslogPipeline(analyzer)
+    syslog_receiver.pipeline = pipeline
+
+    try:
+        asyncio.run(syslog_receiver.run_syslog_receiver(
+            udp_port=udp_port,
+            tcp_port=tcp_port,
+            host=host,
+        ))
+    except KeyboardInterrupt:
+        typer.echo("[STOP] Syslog Receiver stopped manually.")
 
 
 if __name__ == "__main__":

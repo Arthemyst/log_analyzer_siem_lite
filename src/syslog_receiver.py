@@ -1,7 +1,10 @@
 import asyncio
 import logging
-from exporter import validate_rfc5424_message
+from .exporter import validate_rfc5424_message
 from datetime import datetime
+
+pipeline = None
+
 logger = logging.getLogger("SyslogReceiver")
 logger.setLevel(logging.DEBUG)
 
@@ -22,6 +25,9 @@ async def process_syslog_message(msg: str, protocol: str):
         logger.info(f"[RECV-{protocol}] RFC5424 OK")
     else:
         logger.warning(f"[RECV-{protocol}] INVALID RFC5424")
+
+    if pipeline:
+        pipeline.handle_message(msg)
 
     with open("received_syslog.log", "a", encoding="utf-8") as f:
         f.write(f"{datetime.now()} | {protocol} | {msg}\n")

@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
-from exporter import validate_rfc5424_message
-from logs_analyzer import LogsAnalyzer
+from .exporter import validate_rfc5424_message
+from .logs_analyzer import LogsAnalyzer
 
 logger = logging.getLogger("SyslogPipeline")
 logger.setLevel(logging.DEBUG)

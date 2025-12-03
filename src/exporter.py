@@ -2,10 +2,8 @@ import csv
 import json
 import logging
 import os
-import re
 import socket
 import tempfile
-from datetime import datetime
 from logging.handlers import SysLogHandler
 
 logger = logging.getLogger("Exporter")
@@ -22,8 +20,10 @@ logger.addHandler(console_handler)
 
 from datetime import datetime
 
+
 class RFC5424ValidationError(Exception):
     pass
+
 
 def _parse_pri_block(pri_text: str) -> int:
     if not pri_text.startswith("<") or ">" not in pri_text:
@@ -78,10 +78,10 @@ def validate_rfc5424_message(message: str) -> bool:
         if pri_end == -1:
             return False
 
-        pri_block = message[:pri_end+1]
+        pri_block = message[:pri_end + 1]
         pri = _parse_pri_block(pri_block)
 
-        msg = message[pri_end+1:].strip()
+        msg = message[pri_end + 1:].strip()
         parts = _split_with_structured_data(msg)
 
         if len(parts) < 7:
@@ -137,6 +137,7 @@ def export_to_csv(alerts: list[dict], path: str = "exports/alerts.csv") -> None:
         if 'temp_name' in locals() and os.path.exists(temp_name):
             os.remove(temp_name)
 
+
 def export_to_json(alerts: list[dict], path: str = "exports/alerts.json") -> None:
     try:
         if not alerts:
@@ -164,7 +165,6 @@ def export_to_json(alerts: list[dict], path: str = "exports/alerts.json") -> Non
         logger.error(f"[EXPORT] Unexpected error during JSON export: {type(e).__name__} - {e}")
         if 'temp_name' in locals() and os.path.exists(temp_name):
             os.remove(temp_name)
-
 
 
 def format_rfc5424_message(alert: dict, app_name: str = "LogAnalyzer") -> str:
@@ -218,7 +218,6 @@ def extract_severity_from_message(message: str) -> int:
     except (ValueError, IndexError, TypeError) as e:
         logger.debug(f"[SYSLOG] PRI parsing failed ({type(e).__name__}): {e}. Defaulting severity=6.")
         return default_severity
-
 
 
 def send_syslog_alert(alert: dict, server: str = "127.0.0.1", port: int = 514, use_tcp: bool = False) -> None:
