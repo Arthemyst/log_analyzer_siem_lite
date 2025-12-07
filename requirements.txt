@@ -5,3 +5,7 @@ fpdf
 aiofiles
 aiohttp
 requests
+httpx
+fastapi
+uvicorn
+pytest-asyncio
