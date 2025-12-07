@@ -60,7 +60,7 @@ def classify_attack(path: str, payload: str, user_agent: str) -> str:
         if "<script>" in payload:
             return "XSS attack"
 
-        if "select" in path or "union" in path:
+        if "select" in payload or "union" in payload:
             return "SQL injection"
 
         if "login" in path and "password" in payload:
