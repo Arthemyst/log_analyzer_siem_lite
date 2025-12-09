@@ -9,20 +9,37 @@ from src.exporter import send_syslog_alert
 
 app = FastAPI()
 
+os.makedirs('logs', exist_ok=True)
 logger = logging.getLogger('Honeypot')
 logger.setLevel(logging.INFO)
 
-file_handler = logging.FileHandler('honeypot.log')
+file_handler = logging.FileHandler('logs/honeypot.log')
 formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
 file_handler.setFormatter(formatter)
-
 logger.addHandler(file_handler)
 
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
-HONEYPOT_EVENTS_FILE = "honeypot_events.jsonl"
+
+EVENTS_DIR = "logs"
+HONEYPOT_EVENTS_FILE = os.path.join(EVENTS_DIR, "honeypot_events.jsonl")
+
+
+def map_attack_to_severity(attack_type: str) -> int:
+    mapping = {
+        "SQL injection": 3,
+        "Command execution probe": 3,
+        "File disclosure probe": 3,
+        "XSS attack": 4,
+        "Credential stuffing attempt": 4,
+        "wordpress-scan": 5,
+        "PHPMyAdmin scan": 5,
+        "automated-scan": 5,
+        "generic-attack": 6,
+    }
+    return mapping.get(attack_type, 6)
 
 
 def save_event_locally(event: dict):
@@ -108,6 +125,9 @@ async def catch_all(request: Request, full_path: str):
         "source": attacker_ip,
         "alert": f"[HONEYPOT] {attack_type} @ /{full_path} | UA={user_agent} | payload={payload[:80]}",
         "pid": 0,
+        "severity": map_attack_to_severity(attack_type),
+        "facility": 17,
+        "msgid": "HONEYPOT"
     }
 
     try:
