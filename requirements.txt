@@ -5,3 +5,10 @@ fpdf
 aiofiles
 aiohttp
 requests
+httpx
+fastapi
+uvicorn
+pytest-asyncio
+streamlit
+pandas
+plotly

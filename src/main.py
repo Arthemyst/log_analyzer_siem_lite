@@ -94,5 +94,10 @@ def syslog_receiver_command(
         typer.echo("[STOP] Syslog Receiver stopped manually.")
 
 
+@app.command("honeypot")
+def run_honeypot(port: int = 8080):
+    import uvicorn
+    uvicorn.run("honeypot.honeypot:app", host="0.0.0.0", port=port, reload=False)
+
 if __name__ == "__main__":
     app()

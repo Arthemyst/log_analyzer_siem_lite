@@ -3,48 +3,76 @@
 ## Opis projektu
 
 **Log Analyzer (SIEM-lite)** to lekki analizator logów systemowych w Pythonie, inspirowany systemami klasy **SIEM (Security Information and Event Management)**.  
-Narzędzie wykrywa i klasyfikuje potencjalne incydenty bezpieczeństwa w logach SSH, wzbogacając je o dane z zewnętrznych źródeł **Threat Intelligence**.
+Projekt wykrywa i klasyfikuje potencjalne incydenty bezpieczeństwa w logach, wzbogaca je o dane zewnętrzne (Threat Intelligence), przetwarza komunikaty Syslog i umożliwia ich wizualizację dzięki panelowi dashboard.
 
 Projekt zawiera:
 - analizator logów,
 - walidator RFC 5424,
 - eksport danych (CSV / JSON / Syslog),
 - asynchroniczny Syslog Receiver (UDP + TCP),
-- pipeline łączący Syslog → Analyzer,
-- generowanie raportów PDF.
+- pipeline łączący Syslog i Analyzer,
+- generowanie raportów PDF,
+- Honeypot HTTP (FastAPI),
+- Dashboard wizualizacyjny (Streamlit).
 
 ## Funkcje
 
-- **Monitorowanie logów w czasie rzeczywistym**  
-  Asynchroniczny mechanizm śledzenia wpisów (`aiofiles`, `asyncio`).
+### Analiza logów
+- wykrywanie nieudanych logowań,
+- detekcja prób brute-force,
+- analiza wzorców w czasie,
+- klasyfikacja incydentów SSH.
 
-- **Wykrywanie prób brute-force**  
-  Analiza nieudanych logowań w oknach czasowych, wykrywanie ≥ 5 prób logowania w krótkim czasie.  
-  Historia przechowywana w SQLite, dzięki czemu dane utrzymują się między restartami.
+### Monitorowanie w czasie rzeczywistym
+- śledzenie logów z wykorzystaniem `asyncio` i `aiofiles`,
+- automatyczne wykrywanie nowych wpisów.
 
-- **Integracja z Threat Intelligence APIs (AbuseIPDB)**  
-  Automatyczne sprawdzanie reputacji adresów IP, zapis danych (kraj, ISP, liczba zgłoszeń, confidence score).  
-  Dane są buforowane w lokalnej bazie SQLite, aby ograniczyć zapytania do API.
+### Threat Intelligence (AbuseIPDB)
+- pobieranie reputacji adresów IP,
+- cache w SQLite ograniczający zapytania do API.
 
-- **Eksport alertów (exporter module)**  
-  Możliwość zapisu alertów do:
-  - **CSV**
-  - **JSON**
-  - **Syslog RFC 5424**
-    - formatowanie wiadomości RFC 5424,
-    - walidacja strukturalna (bez regex),
-    - wysyłanie przez UDP lub TCP
-      ```
-      send_syslog_alert(alert, server="127.0.0.1", port=514)
-      ```
-- **Generowanie raportów PDF**  
-  Automatyczne tworzenie raportów z incydentami, danymi reputacyjnymi i znacznikami czasu.
+### Eksport alertów
+Obsługiwane są 3 formaty:
+- **CSV**
+- **JSON**
+- **Syslog RFC 5424**
+  - generowanie strukturalnych komunikatów,
+  - walidacja struktury,
+  - wysyłanie przez UDP lub TCP.
 
-- **Trwała baza SQLite**  
-  Przechowuje:
-  - próby logowania (`failed_logins`)
-  - ostatnie alerty brute-force (`alerts_log`)
-  - dane reputacyjne IP (`cache`)
+### Syslog Receiver (UDP + TCP)
+- pełna obsługa Syslog w standardzie RFC 5424,
+- wsparcie TCP octet-framing (RFC 6587),
+- asynchroniczny serwer UDP/TCP,
+- zapis odebranych zdarzeń do `logs/received_syslog.log`.
+
+### Syslog Pipeline
+- parsowanie wiadomości RFC 5424,
+- ekstrakcja: timestamp, hostname, procid, structured data, message,
+- przekazywanie alertów do LogsAnalyzer.
+
+### Raporty PDF
+- generacja raportów incydentów,
+- eksportowane dane z Threat Intelligence.
+
+### HTTP Honeypot (FastAPI)
+- przyjmuje dowolne ścieżki HTTP,
+- odczytuje payloady z żądań,
+- klasyfikuje typ ataku:
+  - XSS,
+  - SQL injection,
+  - credential stuffing,
+  - scans (wp-admin, phpMyAdmin),
+  - LFI / file disclosure itd.
+- zapisuje zdarzenia do:
+  - `logs/honeypot_events.jsonl`,
+- generuje alert Syslog RFC 5424.
+
+### Dashboard (Streamlit)
+- wizualizacja zdarzeń z Honeypota i Sysloga,
+- statystyki, wykresy, podsumowania,
+- analiza częstości ataków,
+- ostatnie logi w formie tabel.
 
 ## Testy i pokrycie kodu
 
@@ -56,13 +84,13 @@ Projekt zawiera zestaw testów jednostkowych (`pytest`) obejmujący:
 
 ### Uruchamianie testów
 
-```bash
+```
   pytest -v
 ```
 
 ### Sprawdzenie pokrycia testowego
 
-```bash
+```
   pytest --cov=src --cov-report=term-missing
 ```
 
@@ -72,18 +100,23 @@ Raport pokaże procentowe pokrycie testami oraz pliki, które wymagają dodatkow
 
 ```
 src/
- ├── main.py                 # CLI (typer)
- ├── logs_analyzer.py        # Log Analyzer wrapper
- ├── suspicious_patterns.py  # Wykrywanie incydentów SSH
- ├── failed_logins_db.py     # Baza SQLite
- ├── threat_intel.py         # Integracja AbuseIPDB
- ├── exporter.py             # Eksport CSV / JSON / Syslog RFC5424
- ├── syslog_receiver.py      # Asynchroniczny Syslog UDP/TCP receiver
- ├── syslog_pipeline.py      # Pipeline Syslog → Analyzer
- ├── generate_report.py      # Raporty PDF
- └── utils.py                # Pomocnicze funkcje
+ ├── main.py                 
+ ├── logs_analyzer.py        
+ ├── suspicious_patterns.py  
+ ├── failed_logins_db.py     
+ ├── threat_intel.py         
+ ├── exporter.py             
+ ├── syslog_receiver.py      
+ ├── syslog_pipeline.py      
+ ├── generate_report.py      
+ └── utils.py                
+honeypot/
+ └── honeypot.py 
+dashboard/
+ └── app.py 
 tests/
  ├── test_exporter.py
+ ├── test_honeypot.py
  └── test_suspicious_patterns.py
 ```
 
@@ -95,7 +128,7 @@ tests/
 - Python 3.10+
 
 ## Instalowanie zależności
-```bash 
+``` 
   pip install -r requirements.txt
 ```
 
@@ -114,13 +147,14 @@ tests/
 ### Monitorowanie logów w czasie rzeczywistym
 
 ```bash
-  python -m src.main.py --realtime --paths test.log
+  python -m src.main analyze --realtime --paths test.log
 ```
 - obserwuje plik logów w czasie rzeczywistym,  
 - zapisuje próby logowania do SQLite (`cache/failed_logins.db`),  
 - pobiera reputację IP z AbuseIPDB (cacheowane),  
 - zapisuje alerty w `alerts/alerts.json`,  
 - opcjonalnie wysyła alerty do serwera Syslog.
+
 
 ## Struktura danych (SQLite)
 | Tabela | Opis |
@@ -146,10 +180,38 @@ tests/
 - eksportera
 - dalszego przetwarzania (opcjonalnie: Threat Intel, PDF, syslog forward)
 
+## Honeypot (FastAPI)
+
+```
+  uvicorn honeypot.honeypot:app --host 0.0.0.0 --port 8080
+```
+
+## Dashboard (Streamlit)
+
+```
+  streamlit run dashboard/app.py
+```
+
+## Generowanie przykładowych zdarzeń
+
+### Honeypot
+```
+  curl http://localhost:8080/wp-admin
+  curl -X POST http://localhost:8080/login -d "username=admin&password=admin"
+  curl http://localhost:8080/etc/passwd
+```
+
+### Syslog
+python
+```
+from src.exporter import send_syslog_alert
+send_syslog_alert({"source": "10.0.0.123", "alert": "Test alert", "pid": 111})
+```
+
 
 ## Następne kroki
 - **Machine Learning Anomaly Detection** – automatyczne wykrywanie nietypowych wzorców
-- **Web Dashboard** – wizualizacja danych (Streamlit / Dash)
+- Integracja Reguł IDS
   
 # 🇬🇧 Log Analyzer (SIEM-lite)
 
@@ -160,14 +222,16 @@ It detects, classifies, and enriches security incidents in SSH logs with data fr
 
 The project integrates:
 
-- Log file analysis (batch & real-time)
-- Threat Intelligence (AbuseIPDB)
-- RFC 5424 message generation + validation
-- CSV / JSON exporting
-- Syslog forwarding
-- Asynchronous Syslog Receiver
-- Syslog Pipeline
-- PDF reporting
+- Log file analysis (batch & real-time),
+- Threat Intelligence (AbuseIPDB),
+- RFC 5424 message generation + validation,
+- CSV / JSON / RFC 5424 Syslog exporting,
+- Strict RFC 5424 validator,
+- Asynchronous Syslog Receiver (UDP + TCP),
+- Syslog Pipeline,
+- PDF reporting,
+- HTTP Honeypot (FastAPI),
+- Data visualization dashboard (Streamlit).
 
 ## Features
 
@@ -209,6 +273,17 @@ Used to store:
 - `alerts_log`
 - `cache` (Threat Intelligence data)
 
+### FastAPI HTTP Honeypot
+- catches arbitrary HTTP traffic,
+- captures payloads and metadata,
+- performs attack classification,
+- logs to JSONL + Syslog.
+
+### Streamlit Dashboard
+- presents Honeypot + Syslog activity,
+- charts and tables,
+- real-time analytics.
+
 ## Testing
 
 Unit tests cover:
@@ -218,11 +293,11 @@ Unit tests cover:
 
 ### Run tests
 
-```bash
+```
   pytest -v
 ```
 ### Code coverage report
-```bash
+```
   pytest --cov=src --cov-report=term-missing
 ```
 
@@ -237,8 +312,13 @@ src/
  ├── exporter.py
  ├── generate_report.py
  └── utils.py
+honeypot/
+ └── honeypot.py # FastAPI Honeypot
+dashboard/
+ └── app.py # Streamlit dashboard
 tests/
  ├── test_exporter.py
+ ├── test_honeypot.py
  └── test_suspicious_patterns.py
 ```
 
@@ -252,14 +332,14 @@ tests/
 
 in root directory
 
-```bash
+```
   pip install -r requirements.txt
 ```
 
 ## How to Run
 
 ### To analyze specific logs file
-```bash
+```
   python -m src.main analyze --file ./samples/auth_sample_40.log --report
 ```
 
@@ -269,7 +349,7 @@ Performs:
 - generates `report.pdf`.
 
 ### Real-time monitoring
-```bash
+```
   python -m src.main analyze --realtime --paths test.log
 ```
 
@@ -279,20 +359,28 @@ Performs:
 - queries AbuseIPDB for IP reputation (cached),
 - saves alerts to `alerts/alerts.json`.
 
-## Data Structure
+### Syslog Receiver
+```
+  python -m src.main syslog --udp-port 514 --tcp-port 514 --host 0.0.0.0
+```
+
+### Honeypot
+```
+  uvicorn honeypot.honeypot:app --host 0.0.0.0 --port 8080
+```
+
+### Dashboard
+```
+  streamlit run dashboard/app.py
+```
+
+## Database Data Structure
 | Table | Description |
 |--------|-------------|
 | `failed_logins` | Records all failed login attempts |
 | `alerts_log` | Stores last brute-force alert timestamps |
 | `cache` | Stores cached Threat Intelligence data |
 
-## Syslog Receiver
-
-### Start Syslog Receiver
-```bash
-  python -m src.main syslog --udp-port 514 --tcp-port 514 --host 0.0.0.0
-```
-
 ### Next steps
 - Add **Machine Learning Anomaly Detection**
-- Build **Web Dashboard** (Streamlit / Dash)
+- IDS system
