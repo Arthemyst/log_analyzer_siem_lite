@@ -173,7 +173,17 @@ def format_rfc5424_message(alert: dict, app_name: str = "LogAnalyzer") -> str:
     Example output:
     <134>1 2025-10-18T18:00:00Z host LogAnalyzer 1234 ID99 [event@32473 user="root" src_ip="1.2.3.4"] message
     """
-    pri = 134  # facility(16)*8 + severity(6)
+    facility = int(alert.get("facility", 16))  # local0
+    severity = int(alert.get("severity", 6))    # info
+
+    if not (0 <= facility <= 23):
+        facility = 16
+
+    if not (0 <= severity <= 7):
+        severity = 6
+
+    pri = facility * 8 + severity
+
     version = 1
     timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
     hostname = socket.gethostname()
@@ -229,10 +239,12 @@ def send_syslog_alert(alert: dict, server: str = "127.0.0.1", port: int = 514, u
 
         socktype = socket.SOCK_STREAM if use_tcp else socket.SOCK_DGRAM
         handler = SysLogHandler(address=(server, port), socktype=socktype)
+
         sys_logger = logging.getLogger("SyslogForwarder")
         sys_logger.addHandler(handler)
         sys_logger.setLevel(logging.INFO)
         sys_logger.info(message)
+
         handler.close()
         sys_logger.removeHandler(handler)
         logger.info(f"[SYSLOG] Sent alert -> {server}:{port} ({'TCP' if use_tcp else 'UDP'})")
