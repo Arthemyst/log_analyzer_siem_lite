@@ -12,3 +12,9 @@ pytest-asyncio
 streamlit
 pandas
 plotly
+pyshark
+scapy
+netfilterqueue
+numpy
+scikit-learn
+joblib
