@@ -1,8 +1,11 @@
+import json
 import os
 import time
-import json
+
 import pyshark
+
 from flow_aggregator import FlowAggregator
+from ml_runtime_detector import MLRuntimeDetector
 
 
 def packet_to_dict(packet):
@@ -13,18 +16,31 @@ def packet_to_dict(packet):
         length = int(packet.length)
         ts = packet.sniff_time.timestamp()
 
-        try:
-            src_port = packet[packet.transport_layer].srcport
-            dst_port = packet[packet.transport_layer].dstport
-        except Exception:
-            src_port = "-"
-            dst_port = "-"
+        src_port = 0
+        dst_port = 0
+        if hasattr(packet, "transport_layer") and packet.transport_layer:
+            try:
+                src_port = int(packet[packet.transport_layer].srcport)
+                dst_port = int(packet[packet.transport_layer].dstport)
+            except Exception:
+                pass
 
-        tcp_flags = packet.tcp.flags if hasattr(packet, "tcp") else "-"
+        # TCP flags
+        tcp_flags = "-"
+        if hasattr(packet, "tcp"):
+            tcp_flags = getattr(packet.tcp, "flags", "-")
 
-        http_host = packet.http.host if hasattr(packet, "http") else None
-        http_uri = packet.http.request_uri if hasattr(packet, "http") else None
-        dns_query = packet.dns.qry_name if hasattr(packet, "dns") else None
+        # HTTP
+        http_host = None
+        http_uri = None
+        if hasattr(packet, "http"):
+            http_host = getattr(packet.http, "host", None)
+            http_uri = getattr(packet.http, "request_uri", None)
+
+        # DNS
+        dns_query = None
+        if hasattr(packet, "dns"):
+            dns_query = getattr(packet.dns, "qry_name", None)
 
         return {
             "src_ip": src_ip,
@@ -41,24 +57,26 @@ def packet_to_dict(packet):
         }
 
     except Exception as e:
-        print(f"[!] packet_to_dict error: {e}")
+        print(f"[!] packet_to_dict error (ignored): {type(e).__name__}")
         return None
-
 
 
 def save_flows(flow_list):
     os.makedirs("flows", exist_ok=True)
+    path = "flows/flows_capture.jsonl"
 
-    with open("flows/flows_capture.jsonl", "a", encoding="utf-8") as f:
+    with open(path, "a", encoding="utf-8") as f:
         for flow in flow_list:
             f.write(json.dumps(flow) + "\n")
 
 
-def run_realtime_flow_builder(interface: str, timeout: int = 60, export_interval: int = 5):
+def run_realtime_flow_builder(interface: str, timeout: int = 60, export_interval: int = 5, ml_threshold: float = -0.20):
     print(f"[*] Starting real-time flow builder on interface: {interface}")
     print(f"[*] Flow timeout: {timeout}s | Export interval: {export_interval}s")
+    print(f"[*] ML anomaly threshold: {ml_threshold}")
 
     aggregator = FlowAggregator(timeout=timeout)
+    ml_detector = MLRuntimeDetector(threshold=ml_threshold)
 
     try:
         capture = pyshark.LiveCapture(interface=interface)
@@ -74,27 +92,60 @@ def run_realtime_flow_builder(interface: str, timeout: int = 60, export_interval
             aggregator.add_packet(pkt_dict)
 
         now = time.time()
+
         if now - last_export >= export_interval:
             flows = aggregator.export_timeout_flows()
 
             if flows:
                 save_flows(flows)
+
+                for flow in flows:
+                    result = ml_detector.score_flow(flow)
+                    print("[DEBUG ML]", result["score"])
+
+                    if result["anomaly"]:
+                        print("[IDS-ML] ANOMALY DETECTED", result)
+                        print(json.dumps(result, indent=2))
+
                 print(f"[+] Exported {len(flows)} flows")
 
             last_export = now
 
+
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Realtime Flow Builder for IDS")
-    parser.add_argument("--interface", required=True, help="Network interface to sniff")
-    parser.add_argument("--timeout", type=int, default=60, help="Flow timeout in seconds")
-    parser.add_argument("--interval", type=int, default=5, help="Interval between flow exports")
-
+    parser = argparse.ArgumentParser(
+        description="Realtime Flow Builder for IDS"
+    )
+    parser.add_argument(
+        "--interface",
+        required=True,
+        help="Network interface to sniff"
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=60,
+        help="Flow timeout in seconds"
+    )
+    parser.add_argument(
+        "--interval",
+        type=int,
+        default=5,
+        help="Interval between flow exports"
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=-0.20,
+        help="ML anomaly score threshold",
+    )
     args = parser.parse_args()
 
     run_realtime_flow_builder(
         interface=args.interface,
         timeout=args.timeout,
-        export_interval=args.interval
+        export_interval=args.interval,
+        ml_threshold=args.threshold,
     )
