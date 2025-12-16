@@ -1,17 +1,27 @@
 import json
 import os
 import time
+from datetime import datetime
 
 import pyshark
 
+from correlation_engine import CorrelationEngine
+from detection_engine import DetectionEngine
 from flow_aggregator import FlowAggregator
+from honeypot_tail import HoneypotTail
 from ml_runtime_detector import MLRuntimeDetector
+from scan_heuristic import ScanHeuristicDetector
+
+EVENTS_DIR = "logs"
+HONEYPOT_EVENTS_FILE = os.path.join(EVENTS_DIR, "honeypot_events.jsonl")
 
 
 def packet_to_dict(packet):
     try:
-        src_ip = packet.ip.src if hasattr(packet, "ip") else "-"
-        dst_ip = packet.ip.dst if hasattr(packet, "ip") else "-"
+        if not hasattr(packet, "ip"):
+            return None
+        src_ip = packet.ip.src
+        dst_ip = packet.ip.dst
         protocol = packet.highest_layer
         length = int(packet.length)
         ts = packet.sniff_time.timestamp()
@@ -77,6 +87,17 @@ def run_realtime_flow_builder(interface: str, timeout: int = 60, export_interval
 
     aggregator = FlowAggregator(timeout=timeout)
     ml_detector = MLRuntimeDetector(threshold=ml_threshold)
+    scan_detector = ScanHeuristicDetector(
+        window_seconds=10,
+        port_threshold=20,
+    )
+    detection_engine = DetectionEngine(
+        ml_detector=ml_detector,
+        scan_detector=scan_detector,
+    )
+
+    correlator = CorrelationEngine(window_seconds=300)
+    honeypot_tail = HoneypotTail(HONEYPOT_EVENTS_FILE)
 
     try:
         capture = pyshark.LiveCapture(interface=interface)
@@ -93,6 +114,12 @@ def run_realtime_flow_builder(interface: str, timeout: int = 60, export_interval
 
         now = time.time()
 
+        for hp_event in honeypot_tail.poll():
+            correlator.ingest_honeypot_event(hp_event)
+            hp_alert = correlator.honeypot_alert(hp_event)
+            print("\n[HONEYPOT ALERT]")
+            print(json.dumps(hp_alert, indent=2))
+
         if now - last_export >= export_interval:
             flows = aggregator.export_timeout_flows()
 
@@ -100,12 +127,19 @@ def run_realtime_flow_builder(interface: str, timeout: int = 60, export_interval
                 save_flows(flows)
 
                 for flow in flows:
-                    result = ml_detector.score_flow(flow)
-                    print("[DEBUG ML]", result["score"])
+                    alerts = detection_engine.process_flow(flow)
 
-                    if result["anomaly"]:
-                        print("[IDS-ML] ANOMALY DETECTED", result)
-                        print(json.dumps(result, indent=2))
+                    for alert in alerts:
+                        alert["timestamp"] = datetime.utcnow().isoformat() + "Z"
+
+                        enriched = correlator.correlate(alert)
+
+                        if enriched.get("correlated"):
+                            print("\n[CORRELATED ALERT]")
+                        else:
+                            print("\n[IDS ALERT]")
+
+                        print(json.dumps(enriched, indent=2))
 
                 print(f"[+] Exported {len(flows)} flows")
 
