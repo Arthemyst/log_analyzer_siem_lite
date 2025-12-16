@@ -31,7 +31,7 @@ class MLRuntimeDetector:
         anomaly = score < self.threshold
 
         return {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now().isoformat() + "Z",
             "src_ip": flow.get("src_ip"),
             "dst_ip": flow.get("dst_ip"),
             "src_port": flow.get("src_port"),
@@ -39,4 +39,5 @@ class MLRuntimeDetector:
             "protocol": flow.get("protocol"),
             "score": score,
             "anomaly": anomaly,
+            "type": "ML_ANOMALY"
         }
