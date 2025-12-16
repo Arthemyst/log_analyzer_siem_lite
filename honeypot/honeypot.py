@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 
 from fastapi import FastAPI, Request
-
+from honeypot_mitre import HONEYPOT_MITRE
 from src.exporter import send_syslog_alert
 
 app = FastAPI()
@@ -116,6 +116,7 @@ async def catch_all(request: Request, full_path: str):
         "payload": payload,
         "attack_type": attack_type,
         "user_agent": user_agent,
+        "mitre": HONEYPOT_MITRE.get(attack_type),
     }
 
     save_event_locally(event)
